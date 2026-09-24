@@ -1,52 +1,6 @@
-"""Schema integration test — real Postgres+PostGIS via docker compose.
-
-Requires the db service: `docker compose up -d db`. Creates/uses a separate
-`earth_monitor_test` database and rolls back all writes — dev data untouched.
-"""
-
-import os
-from collections.abc import Iterator
+"""Schema integration test — real Postgres+PostGIS via docker compose."""
 
 import psycopg
-import pytest
-
-from app.config import get_settings
-
-ADMIN_URL = "postgresql://postgres:postgres@localhost:5432/postgres"
-TEST_URL = "postgresql://postgres:postgres@localhost:5432/earth_monitor_test"
-
-
-def _admin_reachable() -> bool:
-    try:
-        with psycopg.connect(ADMIN_URL, connect_timeout=2):
-            return True
-    except psycopg.OperationalError:
-        return False
-
-
-pytestmark = pytest.mark.skipif(not _admin_reachable(), reason="docker compose up -d db first")
-
-
-@pytest.fixture(scope="session")
-def db() -> Iterator[psycopg.Connection]:
-    # point the app at the test database
-    os.environ["EM_DATABASE_URL"] = TEST_URL
-    get_settings.cache_clear()
-
-    with psycopg.connect(ADMIN_URL, autocommit=True) as admin:
-        exists = admin.execute(
-            "SELECT 1 FROM pg_database WHERE datname = 'earth_monitor_test'"
-        ).fetchone()
-        if not exists:
-            admin.execute("CREATE DATABASE earth_monitor_test")
-
-    from app.db.migrate import migrate
-
-    migrate()
-
-    conn = psycopg.connect(TEST_URL)  # never committed — rolls back on close
-    yield conn
-    conn.close()
 
 
 def test_migrations_are_idempotent(db: psycopg.Connection) -> None:

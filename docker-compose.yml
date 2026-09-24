@@ -29,5 +29,20 @@ services:
       db:
         condition: service_healthy
 
+  # ingestion worker — separate process from the API by design (Phase 4).
+  # Same image; the command swaps uvicorn for the poll loop.
+  ingest:
+    build: ./backend
+    command: ["python", "-m", "app.ingest"]
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      EM_DATABASE_URL: postgresql://postgres:postgres@db:5432/earth_monitor
+      EM_ENVIRONMENT: dev
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
