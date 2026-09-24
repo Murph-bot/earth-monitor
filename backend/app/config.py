@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     ingest_min_interval_hours: float = 6.0  # floor on per-sensor poll cadence
     ingest_interval_hours: float | None = None  # set to override all sensor cadences
     ingest_tick_seconds: int = 60  # scheduler wake-up granularity
+    ingest_analyze: bool = True  # False = catalog-only sweeps (no pixel reads)
 
 
 @lru_cache

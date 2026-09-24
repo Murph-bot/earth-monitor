@@ -85,21 +85,6 @@ class FakeAdapter(SensorAdapter):
 
 
 @pytest.fixture
-def clean(db: psycopg.Connection) -> psycopg.Connection:
-    for table in (
-        "scene_aois",
-        "metrics",
-        "scenes",
-        "aoi_sensor_state",
-        "aois",
-        "users",
-        "ingestion_runs",
-    ):
-        db.execute(f"DELETE FROM {table}")
-    return db
-
-
-@pytest.fixture
 def aoi_id(clean: psycopg.Connection) -> str:
     user_id = clean.execute(
         "INSERT INTO users (email) VALUES (%s) RETURNING id", (f"{uuid.uuid4()}@t.dev",)
@@ -117,7 +102,7 @@ def aoi_id(clean: psycopg.Connection) -> str:
 
 def test_ingest_populates_scenes_coverage_and_state(db: psycopg.Connection, aoi_id: str) -> None:
     adapter = FakeAdapter([_meta("SCENE_A", COVERING), _meta("SCENE_B", FAR_AWAY)])
-    stats = ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48)
+    stats = ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
 
     assert stats.aois_checked == 1 and stats.scenes_found == 2 and stats.scenes_inserted == 2
     assert adapter.searched_windows  # backfill window used (no watermark yet)
@@ -145,8 +130,8 @@ def test_ingest_populates_scenes_coverage_and_state(db: psycopg.Connection, aoi_
 
 def test_ingest_is_idempotent(db: psycopg.Connection, aoi_id: str) -> None:
     adapter = FakeAdapter([_meta("SCENE_A", COVERING)])
-    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48)
-    stats = ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48)
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    stats = ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
 
     assert stats.scenes_found == 1 and stats.scenes_inserted == 0
     count = db.execute("SELECT count(*) FROM scenes WHERE scene_key = 'SCENE_A'").fetchone()[0]

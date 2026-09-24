@@ -43,3 +43,20 @@ def db() -> Iterator[psycopg.Connection]:
     conn = psycopg.connect(TEST_URL)  # never committed — rolls back on close
     yield conn
     conn.close()
+
+
+@pytest.fixture
+def clean(db: psycopg.Connection) -> psycopg.Connection:
+    """Wipe ingest-written tables; the session conn shares uncommitted state
+    across tests, so each test starts from an empty catalog."""
+    for table in (
+        "scene_aois",
+        "metrics",
+        "scenes",
+        "aoi_sensor_state",
+        "aois",
+        "users",
+        "ingestion_runs",
+    ):
+        db.execute(f"DELETE FROM {table}")
+    return db

@@ -21,6 +21,7 @@ import structlog
 from psycopg.types.json import Jsonb
 
 from app.adapters.base import GeoJSONGeom, SceneMeta, SensorAdapter
+from app.analysis.runner import analyze_pending
 
 log = structlog.get_logger()
 
@@ -31,6 +32,7 @@ class RunStats:
     aois_checked: int = 0
     scenes_found: int = 0
     scenes_inserted: int = 0
+    metrics_written: int = 0
     scene_ids: list[int] = field(default_factory=list)
 
 
@@ -122,6 +124,7 @@ def ingest_sensor(
     *,
     backfill_days: int,
     overlap_hours: int,
+    analyze: bool = True,
 ) -> RunStats:
     """Run one catalog sweep for `adapter`'s sensor. Writes an ingestion_runs
     audit row; on adapter/DB failure the row is marked failed and the error
@@ -134,7 +137,7 @@ def ingest_sensor(
         assert row is not None  # RETURNING always yields a row
         run_id = int(row[0])
 
-    aois_checked = found = inserted = 0
+    aois_checked = found = inserted = metrics_written = 0
     scene_ids: list[int] = []
     try:
         now = datetime.now(UTC)
@@ -156,13 +159,17 @@ def ingest_sensor(
                 _update_watermark(
                     conn, aoi_id, sensor_id, max((m.acquired_at for m in metas), default=None)
                 )
+        if analyze:
+            # pixel reads happen here — outside the metadata transactions
+            metrics_written = analyze_pending(conn, adapter)
     except Exception as exc:
         with conn.transaction():
             conn.execute(
                 """UPDATE ingestion_runs SET finished_at = now(), status = 'failed',
-                       error = %s, scenes_found = %s, scenes_inserted = %s
+                       error = %s, scenes_found = %s, scenes_inserted = %s,
+                       metrics_written = %s
                    WHERE id = %s""",
-                (str(exc)[:2000], found, inserted, run_id),
+                (str(exc)[:2000], found, inserted, metrics_written, run_id),
             )
         log.error("ingest_failed", sensor_id=sensor_id, run_id=run_id, error=str(exc))
         raise
@@ -170,9 +177,9 @@ def ingest_sensor(
     with conn.transaction():
         conn.execute(
             """UPDATE ingestion_runs SET finished_at = now(), status = 'success',
-                   scenes_found = %s, scenes_inserted = %s
+                   scenes_found = %s, scenes_inserted = %s, metrics_written = %s
                WHERE id = %s""",
-            (found, inserted, run_id),
+            (found, inserted, metrics_written, run_id),
         )
     log.info(
         "ingest_ok",
@@ -181,5 +188,6 @@ def ingest_sensor(
         aois=aois_checked,
         found=found,
         inserted=inserted,
+        metrics=metrics_written,
     )
-    return RunStats(sensor_id, aois_checked, found, inserted, scene_ids)
+    return RunStats(sensor_id, aois_checked, found, inserted, metrics_written, scene_ids)

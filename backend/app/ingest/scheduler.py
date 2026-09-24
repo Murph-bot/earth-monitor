@@ -66,6 +66,7 @@ def run_due(conn: psycopg.Connection, settings: Settings, *, force: bool = False
                 get_adapter(sensor_id),
                 backfill_days=settings.ingest_backfill_days,
                 overlap_hours=settings.ingest_overlap_hours,
+                analyze=settings.ingest_analyze,
             )
         except Exception:
             # per-sensor isolation: a failed adapter doesn't stop the sweep

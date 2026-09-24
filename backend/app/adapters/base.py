@@ -93,6 +93,9 @@ class SensorAdapter(ABC):
     sensor_id: str
     catalog: str
     collections: tuple[str, ...]
+    # band the quality_mask needs in the window (None = no quality band;
+    # mask then means "inside the AOI polygon" only)
+    mask_band: str | None = None
 
     @abstractmethod
     def search(
