@@ -9,6 +9,9 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
     "structlog>=24.4",
+    "pystac-client>=0.9.0",
+    "rasterio>=1.5.1",
+    "numpy>=2.5.3",
 ]
 
 [dependency-groups]
@@ -25,6 +28,9 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: hits live external catalogs (skipped unless EM_INTEGRATION=1)",
+]
 
 [tool.ruff]
 target-version = "py312"
@@ -37,3 +43,9 @@ select = ["E", "W", "F", "I", "UP", "B", "ASYNC", "RUF"]
 python_version = "3.12"
 strict = true
 mypy_path = "."
+
+# rasterio ships no py.typed marker and rasterio-stubs doesn't resolve on
+# py3.12+; the geo stack's untyped edge is contained to this override.
+[[tool.mypy.overrides]]
+module = ["rasterio.*", "affine.*"]
+ignore_missing_imports = true
