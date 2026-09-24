@@ -21,7 +21,7 @@ services:
       - path: backend/.env
         required: false
     environment:
-      EM_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/earth_monitor
+      EM_DATABASE_URL: postgresql://postgres:postgres@db:5432/earth_monitor
       EM_ENVIRONMENT: dev
     ports:
       - "8000:8000"

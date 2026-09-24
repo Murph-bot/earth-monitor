@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     environment: Literal["dev", "test", "prod"] = "dev"
     log_level: str = "INFO"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/earth_monitor"
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/earth_monitor"
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
 

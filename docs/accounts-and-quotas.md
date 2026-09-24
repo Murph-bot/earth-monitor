@@ -20,7 +20,7 @@ Secrets live in env vars / `.env` (gitignored) — never committed.
 | Service | Used for | Free tier (verify at adoption) | Phase |
 |---|---|---|---|
 | GitHub Actions | CI (+ maybe scheduled ingestion) | ~2,000 min/mo private; unlimited public repos. **Cron auto-disables after 60 days of repo inactivity** and is ToS-gray as a general scheduler → prefer Workers cron for ingestion | 1, 4 |
-| Neon **or** Supabase | Postgres+PostGIS | Neon: ~0.5 GB (Databricks-owned now); Supabase: 500 MB DB, pauses after ~1 week inactivity | 3 |
+| Neon **or** Supabase | Postgres+PostGIS | **Deferred — local Docker PostGIS per ADR-0002.** Candidates for Phase 10: Neon ~0.5 GB (Databricks-owned); Supabase 500 MB but pauses after ~1 week inactivity | 3, 10 |
 | Cloudflare Pages | Web hosting | Unlimited sites/requests (Sotirios's existing account) | 7, 10 |
 | Render / Cloudflare Workers | API + workers | Render free web services sleep; **Render free Postgres expires after 30 days** — never put the DB there. Fly.io free tier is dead (trial only); Railway "free" = $1/mo credit. Workers free: 100k req/day + **5 cron triggers** | 6, 10 |
 | Cloudflare R2 | Thumbnails/derived rasters (if ever needed) | 10 GB, **zero egress fees** | 6+ |

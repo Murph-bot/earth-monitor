@@ -22,11 +22,11 @@ from app.adapters.base import (
 )
 
 BANDS: list[BandSpec] = [
-    BandSpec("red", "red", "OLI B04", 30, "reflectance", scale=2.75e-5, offset=-0.2),
-    BandSpec("nir", "nir08", "OLI B05", 30, "reflectance", scale=2.75e-5, offset=-0.2),
-    BandSpec("swir16", "swir16", "OLI B06", 30, "reflectance", scale=2.75e-5, offset=-0.2),
+    BandSpec("red", "red", "OLI B04", 30, "reflectance", scale=2.75e-5, dn_offset=-0.2),
+    BandSpec("nir", "nir08", "OLI B05", 30, "reflectance", scale=2.75e-5, dn_offset=-0.2),
+    BandSpec("swir16", "swir16", "OLI B06", 30, "reflectance", scale=2.75e-5, dn_offset=-0.2),
     BandSpec(
-        "lwir", "lwir11", "TIRS B10 surface temp", 100, "thermal", scale=0.00341802, offset=149.0
+        "lwir", "lwir11", "TIRS B10 surface temp", 100, "thermal", scale=0.00341802, dn_offset=149.0
     ),
     BandSpec("qa_pixel", "qa_pixel", "USGS QA bitfield", 30, "quality"),
 ]

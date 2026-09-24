@@ -46,7 +46,7 @@ flowchart TB
 | Ingestion | Separate scheduled workers, never the web process | Satellite data is periodic, not streaming. Web stays fast; a hung catalog can't take the API down. |
 | Raster access | Windowed HTTP range reads on COGs (rasterio + rio-tiler; odc-stac for multi-scene stacks) | Reads kilobytes of an AOI window, not 1 GB tiles. This is what makes $0 possible. (stackstac rejected — unmaintained since Aug 2024.) |
 | Tiles | TiTiler, mounted in the same FastAPI deployable | On-the-fly tiles straight from provider COGs → zero tile storage. One process to host, not two. |
-| Database | Postgres + PostGIS (decision deferred to Phase 3) | Multi-user web access rules out SQLite if the site ever opens; PostGIS is the AOI standard anyway. |
+| Database | Postgres + PostGIS, local Docker (ADR-0002) | Spatial is the core datatype; local-first now, `EM_DATABASE_URL` swaps to managed Postgres when we go public. |
 | Mobile path | Same `/v1` API + generated client | `/packages/shared` holds generated types; Expo app later consumes them unchanged. |
 | Notifications | Channel-agnostic alert engine | Email + web push now; mobile push later — same rules, new channel adapter. |
 

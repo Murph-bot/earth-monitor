@@ -45,14 +45,14 @@ COLLECTION = "sentinel-2-c1-l2a"
 VALID_SCL_CLASSES = frozenset({4, 5, 6, 7})  # vegetation, bare soil, water, unclassified
 
 BANDS: list[BandSpec] = [
-    BandSpec("blue", "blue", "B02 490nm", 10, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("green", "green", "B03 560nm", 10, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("red", "red", "B04 665nm", 10, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("rededge1", "rededge1", "B05 705nm", 20, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("nir", "nir", "B08 842nm", 10, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("nir08", "nir08", "B8A 865nm narrow", 20, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("swir16", "swir16", "B11 1610nm", 20, "reflectance", scale=1e-4, offset=-0.1),
-    BandSpec("swir22", "swir22", "B12 2190nm", 20, "reflectance", scale=1e-4, offset=-0.1),
+    BandSpec("blue", "blue", "B02 490nm", 10, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("green", "green", "B03 560nm", 10, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("red", "red", "B04 665nm", 10, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("rededge1", "rededge1", "B05 705nm", 20, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("nir", "nir", "B08 842nm", 10, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("nir08", "nir08", "B8A 865nm narrow", 20, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("swir16", "swir16", "B11 1610nm", 20, "reflectance", scale=1e-4, dn_offset=-0.1),
+    BandSpec("swir22", "swir22", "B12 2190nm", 20, "reflectance", scale=1e-4, dn_offset=-0.1),
     BandSpec("scl", "scl", "Scene Classification Layer", 20, "quality"),
 ]
 

@@ -35,7 +35,7 @@ class BandSpec:
     """One readable band or quality layer of a sensor.
 
     `name` is what analysis modules request; `asset_key` is what the
-    catalog's STAC items call it. scale/offset convert stored DN to physical
+    catalog's STAC items call it. scale/dn_offset convert stored DN to physical
     units (S2 DN→reflectance; Landsat ST DN→kelvin); a STAC item's
     raster:bands extension may override them per scene.
     """
@@ -46,7 +46,7 @@ class BandSpec:
     resolution_m: float
     kind: Literal["reflectance", "thermal", "quality", "sar"]
     scale: float = 1.0
-    offset: float = 0.0
+    dn_offset: float = 0.0  # "offset" is a reserved SQL word — column matches this name
 
 
 @dataclass(frozen=True)
