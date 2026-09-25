@@ -2,13 +2,15 @@ import psycopg
 from fastapi import APIRouter
 
 from app.api.deps import DbConn
-from app.api.v1 import aois, scenes, sensors, tiles
+from app.api.v1 import aois, auth, rules, scenes, sensors, tiles
 
 router = APIRouter()
+router.include_router(auth.router)
 router.include_router(sensors.router)
 router.include_router(aois.router)
 router.include_router(scenes.router)
 router.include_router(tiles.router)
+router.include_router(rules.router)
 
 
 @router.get("/health")

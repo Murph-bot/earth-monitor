@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type maplibregl from "maplibre-gl"
 import { client, type Aoi, type MetricsResponse, type SceneSummary } from "./api"
+import { AuthScreen, clearToken, getToken } from "./auth"
 import { EMPTY_FC, initMap, rectFeature, setGeoData } from "./map"
+import { NotificationsBell } from "./components/NotificationsBell"
 import { Sidebar } from "./components/Sidebar"
 
 interface TileJson {
@@ -33,12 +35,28 @@ export const App = () => {
   const [pendingGeom, setPendingGeom] = useState<GeoJSON.Polygon | null>(null)
   const [draftName, setDraftName] = useState("")
   const [notice, setNotice] = useState<string | null>(null)
+  // null = still probing; the API answers 200 without a token when the dev
+  // fallback is on, so auth screen appears only when the backend demands one
+  const [authed, setAuthed] = useState<boolean | null>(null)
 
   drawRef.current.active = drawMode
 
   const refreshAois = useCallback(async () => {
-    const { data } = await client.GET("/v1/aois")
-    setAois(data?.items ?? [])
+    const { data, error, response } = await client.GET("/v1/aois")
+    if (response.status === 401) {
+      setAuthed(false)
+      return
+    }
+    setAois(error ? [] : (data?.items ?? []))
+  }, [])
+
+  useEffect(() => {
+    // probe: tokenless 200 -> dev mode; 401 -> auth screen; token -> straight in
+    if (getToken()) {
+      setAuthed(true)
+      return
+    }
+    void client.GET("/v1/aois").then((r) => setAuthed(r.response.status !== 401))
   }, [])
 
   // --- map lifecycle -------------------------------------------------------
@@ -94,11 +112,11 @@ export const App = () => {
       mapRef.current = null
       map.remove()
     }
-  }, [])
+  }, [authed])
 
   useEffect(() => {
-    void refreshAois()
-  }, [refreshAois])
+    if (authed) void refreshAois()
+  }, [authed, refreshAois])
 
   // --- interactions ----------------------------------------------------------
   const handleSelectAoi = useCallback(async (a: Aoi) => {
@@ -189,6 +207,9 @@ export const App = () => {
   }, [])
 
   // --- render ----------------------------------------------------------------
+  if (authed === null) return <div className="h-screen bg-zinc-950" />
+  if (!authed) return <AuthScreen onAuth={() => setAuthed(true)} />
+
   return (
     <div className="flex h-screen flex-col">
       <header className="flex h-11 items-center gap-3 border-b border-zinc-800 bg-zinc-950 px-4">
@@ -196,6 +217,18 @@ export const App = () => {
           earth-monitor
         </span>
         <span className="font-mono text-[10px] text-zinc-600">/v1 · sentinel-2 · greece</span>
+        <div className="ml-auto flex items-center gap-1">
+          <NotificationsBell />
+          <button
+            onClick={() => {
+              clearToken()
+              setAuthed(false)
+            }}
+            className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+          >
+            sign out
+          </button>
+        </div>
       </header>
       <div className="flex min-h-0 flex-1">
         <Sidebar

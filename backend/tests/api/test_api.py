@@ -5,16 +5,12 @@ fixture data and endpoint writes ride savepoints (rolled back at teardown).
 """
 
 import json
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
 import psycopg
 import pytest
 from starlette.testclient import TestClient
-
-from app.api.deps import get_db
-from app.main import create_app
 
 AOI: dict[str, Any] = {
     "type": "Polygon",
@@ -24,18 +20,6 @@ COVERING: dict[str, Any] = {
     "type": "Polygon",
     "coordinates": [[[22.6, 40.5], [22.8, 40.5], [22.8, 40.6], [22.6, 40.6], [22.6, 40.5]]],
 }
-
-
-@pytest.fixture
-def client(clean: psycopg.Connection) -> Iterator[TestClient]:
-    app = create_app()
-
-    def _db() -> Iterator[psycopg.Connection]:
-        yield clean
-
-    app.dependency_overrides[get_db] = _db
-    with TestClient(app) as c:
-        yield c
 
 
 @pytest.fixture

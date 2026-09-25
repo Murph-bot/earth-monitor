@@ -1,6 +1,6 @@
-import type { Aoi, SceneSummary } from "../api"
+import type { Aoi, MetricsResponse, SceneSummary } from "../api"
 import { MetricChart } from "./MetricChart"
-import type { MetricsResponse } from "../api"
+import { RulesPanel } from "./RulesPanel"
 
 const km2 = (m2: number) => (m2 / 1e6).toFixed(1)
 const pct = (x: number | null) => (x === null ? "—" : `${x.toFixed(0)}%`)
@@ -103,5 +103,7 @@ export const Sidebar = (p: Props) => (
         ))}
       </div>
     )}
+
+    {p.selectedAoi && <RulesPanel aoiId={p.selectedAoi.id} series={p.metrics?.series ?? []} />}
   </aside>
 )

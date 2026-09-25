@@ -1,5 +1,7 @@
 import { api, type components } from "@earth-monitor/shared"
 
+export type { components }
+
 // Same-origin — vite dev proxy forwards /v1 to uvicorn; prod serves it
 // behind the same host, so the client never hardcodes a URL.
 export const client = api("")

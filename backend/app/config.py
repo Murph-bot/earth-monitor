@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # api
-    dev_user_email: str = "dev@earth-monitor.local"  # pre-auth stub (Phase 8 replaces)
+    dev_user_email: str | None = "dev@earth-monitor.local"  # used only when no
+    # Authorization header is present; set empty in prod to disable
+    jwt_secret: str = "dev-secret-change-me-0123456789abcdef"  # HS256; env in prod
+    jwt_ttl_hours: int = 336  # 14 days
     max_aoi_area_km2: float = 500.0  # windowed reads scale with AOI area
 
     # ingestion worker (python -m app.ingest)

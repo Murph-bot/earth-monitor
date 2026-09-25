@@ -12,6 +12,7 @@ from collections.abc import Iterator
 
 import psycopg
 import pytest
+from starlette.testclient import TestClient
 
 from app.config import get_settings
 
@@ -50,6 +51,8 @@ def clean(db: psycopg.Connection) -> psycopg.Connection:
     """Wipe ingest-written tables; the session conn shares uncommitted state
     across tests, so each test starts from an empty catalog."""
     for table in (
+        "notifications",
+        "alert_rules",
         "scene_aois",
         "metrics",
         "scenes",
@@ -60,3 +63,20 @@ def clean(db: psycopg.Connection) -> psycopg.Connection:
     ):
         db.execute(f"DELETE FROM {table}")
     return db
+
+
+@pytest.fixture
+def client(clean: psycopg.Connection) -> Iterator[TestClient]:
+    """TestClient over the real test DB — get_db overridden to the session
+    conn so endpoint writes ride savepoints and roll back."""
+    from app.api.deps import get_db
+    from app.main import create_app
+
+    app = create_app()
+
+    def _db() -> Iterator[psycopg.Connection]:
+        yield clean
+
+    app.dependency_overrides[get_db] = _db
+    with TestClient(app) as c:
+        yield c

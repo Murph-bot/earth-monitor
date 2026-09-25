@@ -8,6 +8,6 @@
   "scripts": {
     "dev": "npm run dev -w web",
     "build": "npm run build -w web",
-    "gen:client": "cd backend && uv run python -m scripts.dump_openapi && npm run gen -w packages/shared"
+    "gen:client": "cd backend && uv run python -m scripts.dump_openapi && cd ../packages/shared && npm run gen"
   }
 }

@@ -49,3 +49,11 @@ def install_handlers(app: FastAPI) -> None:
 
 def not_found(what: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"{what} not found")
+
+
+def unauthorized(message: str = "authentication required") -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail=message,
+        headers={"x-error-code": "UNAUTHENTICATED", "WWW-Authenticate": "Bearer"},
+    )

@@ -7,9 +7,9 @@ plain dicts (parsed from ST_AsGeoJSON) — the contract is GeoJSON, not WKB.
 
 import uuid
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class Page[T](BaseModel):
@@ -127,6 +127,86 @@ class SceneDetail(BaseModel):
     bbox: Bbox
     assets: dict[str, Any]
     properties: dict[str, Any]
+
+
+# --- auth ------------------------------------------------------------------
+
+
+class RegisterIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=200)
+    display_name: str | None = Field(default=None, max_length=120)
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=200)
+
+
+class UserOut(BaseModel):
+    id: uuid.UUID
+    email: str
+    display_name: str | None
+
+
+class TokenOut(BaseModel):
+    token: str
+    user: UserOut
+
+
+# --- alerts ----------------------------------------------------------------
+
+
+class AlertRuleCreate(BaseModel):
+    metric_name: str = Field(min_length=1, max_length=80)
+    rule_type: Literal["threshold", "baseline_deviation"]
+    params: dict[str, Any] = {}
+    sensor_id: str | None = None
+    min_valid_pixel_pct: float = Field(default=0.5, ge=0, le=1)
+    enabled: bool = True
+
+    @field_validator("params")
+    @classmethod
+    def _params_match_type(cls, p: dict[str, Any], info: Any) -> dict[str, Any]:
+        rt = info.data.get("rule_type")
+        if rt == "threshold":
+            if p.get("op") not in ("lt", "lte", "gt", "gte"):
+                raise ValueError("threshold params need op in lt|lte|gt|gte")
+            if not isinstance(p.get("value"), int | float):
+                raise ValueError("threshold params need numeric 'value'")
+        elif rt == "baseline_deviation":
+            if "days" in p and (not isinstance(p["days"], int) or p["days"] < 7):
+                raise ValueError("baseline 'days' must be an int >= 7")
+            if "pct" in p and not (0 < float(p["pct"]) <= 1):
+                raise ValueError("baseline 'pct' must be in (0, 1]")
+        return p
+
+
+class AlertRuleUpdate(BaseModel):
+    enabled: bool | None = None
+    min_valid_pixel_pct: float | None = Field(default=None, ge=0, le=1)
+
+
+class AlertRuleOut(BaseModel):
+    id: int
+    aoi_id: uuid.UUID
+    metric_name: str
+    rule_type: str
+    params: dict[str, Any]
+    sensor_id: str | None
+    min_valid_pixel_pct: float
+    enabled: bool
+    created_at: datetime
+
+
+class NotificationOut(BaseModel):
+    id: int
+    title: str
+    body: str
+    payload: dict[str, Any]
+    channel: str
+    created_at: datetime
+    read_at: datetime | None
 
 
 # --- metrics ---------------------------------------------------------------

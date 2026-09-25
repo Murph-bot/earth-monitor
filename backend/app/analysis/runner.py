@@ -20,6 +20,7 @@ from rasterio.features import geometry_mask
 from rasterio.warp import transform_geom
 
 from app.adapters.base import AdapterError, GeoJSONGeom, SceneMeta, SensorAdapter
+from app.alerts.evaluate import evaluate_metric
 from app.analysis.base import AnalysisModule
 from app.analysis.registry import modules_for
 
@@ -141,6 +142,18 @@ def _analyze_pair(
                     module.unit,
                     valid_pct,
                 ),
+            )
+            # same transaction: a crash can't leave a metric whose rules
+            # were never evaluated; ON CONFLICT dedups re-analysis
+            evaluate_metric(
+                conn,
+                aoi_id=pair.aoi_id,
+                scene_id=pair.scene_id,
+                sensor_id=adapter.sensor_id,
+                metric_name=module.metric_name,
+                value=value,
+                valid_pixel_pct=valid_pct,
+                date=pair.meta.acquired_at.date(),
             )
             written += 1
     return written
