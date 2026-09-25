@@ -23,6 +23,9 @@ Or via Docker from the repo root: `docker compose up --build` (PostGIS + API).
 - `app/config.py` — pydantic-settings; all env config flows through `Settings`.
 - `app/logging.py` — structlog setup; console in dev, JSON in prod.
 - `app/adapters/` — sensor adapters (Phase 2).
-- `app/modules/` — analysis modules (Phase 5).
-- `app/ingestion/` — scheduled ingestion workers (Phase 4).
+- `app/analysis/` — analysis modules (Phase 5).
+- `app/ingest/` — scheduled ingestion workers (Phase 4).
+- `app/tiles/` — on-the-fly PNG tiles from COGs (Phase 6).
 - `app/db/` — database layer (Phase 3).
+- `scripts/dump_openapi.py` — writes `packages/shared/openapi.json`;
+  then `cd packages/shared && npm run gen` refreshes the typed client.

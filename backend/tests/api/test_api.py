@@ -145,6 +145,26 @@ def test_scene_detail(client: TestClient, clean: psycopg.Connection, aoi_id: str
     assert client.get("/v1/scenes/999999").status_code == 404
 
 
+def test_tiles(client: TestClient, clean: psycopg.Connection, aoi_id: str) -> None:
+    scene_id = _insert_scene_with_coverage(clean, aoi_id)
+
+    tj = client.get(f"/v1/tiles/scenes/{scene_id}/tilejson.json")
+    assert tj.status_code == 200
+    body = tj.json()
+    assert body["tiles"][0].endswith(f"/v1/tiles/scenes/{scene_id}/{{z}}/{{x}}/{{y}}.png")
+    assert len(body["bounds"]) == 4
+
+    assert client.get("/v1/tiles/scenes/999999/tilejson.json").status_code == 404
+    # x=2 out of range at z=1 (max 1) -> invalid tile address
+    assert client.get(f"/v1/tiles/scenes/{scene_id}/1/2/0.png").status_code == 422
+    # scene assets only carry 'red' -> truecolor band hrefs missing
+    r = client.get(f"/v1/tiles/scenes/{scene_id}/10/500/400.png")
+    assert r.status_code == 404 and "lacks asset" in r.json()["error"]["message"]
+    # unknown band names rejected before any COG read
+    r = client.get(f"/v1/tiles/scenes/{scene_id}/10/500/400.png?assets=fake")
+    assert r.status_code == 422 and "unknown bands" in r.json()["error"]["message"]
+
+
 def test_pagination(client: TestClient, clean: psycopg.Connection, aoi_id: str) -> None:
     for i in range(3):
         clean.execute(
