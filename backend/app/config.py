@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/earth_monitor"
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    # api
+    dev_user_email: str = "dev@earth-monitor.local"  # pre-auth stub (Phase 8 replaces)
+    max_aoi_area_km2: float = 500.0  # windowed reads scale with AOI area
+
     # ingestion worker (python -m app.ingest)
     ingest_backfill_days: int = 30  # first-run lookback when no watermark exists
     ingest_overlap_hours: int = 48  # re-search margin for late-arriving catalog items

@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from psycopg_pool import ConnectionPool
 
+from app.api.errors import install_handlers
 from app.api.v1.router import router as v1_router
 from app.config import get_settings
 from app.logging import configure_logging
@@ -15,8 +17,20 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    # autocommit=True so conn.transaction() blocks are real commits —
+    # the same transaction model the ingest pipeline uses.
+    pool = ConnectionPool(
+        conninfo=settings.database_url,
+        min_size=1,
+        max_size=8,
+        kwargs={"autocommit": True},
+        open=False,
+    )
+    pool.open()
+    app.state.pool = pool
     logger.info("app_started", environment=settings.environment)
     yield
+    pool.close()
 
 
 def create_app() -> FastAPI:
@@ -28,6 +42,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    install_handlers(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
