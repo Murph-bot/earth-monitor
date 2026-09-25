@@ -9,11 +9,11 @@ Working name — rename freely; the codebase must not depend on it.
 
 ## Status
 
-**Phase 6 — public API.** `/v1` serves sensors, AOIs, scenes, metric series,
-and dynamic map tiles rendered on the fly from provider COGs. The typed
-client in `packages/shared` is generated from the live OpenAPI spec.
-Earlier phases: schema, scheduled ingestion, NDVI/NDWI analysis — all live
-on real Sentinel-2 data over Thessaly.
+**Phase 7 — web client.** Thin Vite/React/MapLibre frontend in `web/`:
+AOI draw/list/delete, scene browser overlaying live COG tiles, NDVI/NDWI
+charts — all through the generated client in `packages/shared`. Backend
+(Phases 1–6): schema, scheduled ingestion, NDVI/NDWI analysis, `/v1` API +
+dynamic tiles — all live on real Sentinel-2 data over Thessaly.
 See `docs/` for the decision record, sensor matrix, and architecture.
 
 ## Dev quickstart
@@ -21,6 +21,7 @@ See `docs/` for the decision record, sensor matrix, and architecture.
 ```sh
 cd backend && uv sync && uv run uvicorn app.main:app --reload   # API on :8000
 docker compose up --build                                       # PostGIS + API
+npm install && npm run dev                                      # web on :5173
 ```
 
 ## Layout

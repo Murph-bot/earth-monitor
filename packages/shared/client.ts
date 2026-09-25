@@ -5,3 +5,5 @@ import type { paths } from "./api-types";
 
 export const api = (baseUrl: string) =>
   createClient<paths>({ baseUrl: baseUrl.replace(/\/$/, "") });
+
+export type { components, paths } from "./api-types";
