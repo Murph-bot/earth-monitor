@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type maplibregl from "maplibre-gl"
-import { client, type Aoi, type MetricsResponse, type SceneSummary } from "./api"
+import { API_BASE, client, type Aoi, type MetricsResponse, type SceneSummary } from "./api"
 import { AuthScreen, clearToken, getToken } from "./auth"
 import { EMPTY_FC, initMap, rectFeature, setGeoData } from "./map"
 import { NotificationsBell } from "./components/NotificationsBell"
@@ -153,10 +153,14 @@ export const App = () => {
     })
     const tj = data as TileJson | undefined
     if (!tj) return
-    // Tile URLs arrive absolute (server origin); in dev the vite proxy splits
-    // origins, so pin them to the page origin — a no-op in prod same-origin.
-    // (regex, not new URL() — it would percent-encode the {z}/{x}/{y} template)
-    const tiles = tj.tiles.map((u) => u.replace(/^https?:\/\/[^/]+/, location.origin))
+    // Tile URLs arrive absolute (server origin). Rewrite them to the API
+    // origin this build actually talks to — in dev that's the page origin
+    // behind the vite proxy; in split-origin prod it's VITE_API_URL (usually
+    // a no-op since tilejson already returns it). Regex, not new URL() —
+    // URL parsing would percent-encode the {z}/{x}/{y} template.
+    const tiles = tj.tiles.map((u) =>
+      u.replace(/^https?:\/\/[^/]+/, API_BASE || location.origin),
+    )
     if (map.getLayer("scene-tiles")) map.removeLayer("scene-tiles")
     if (map.getSource("scene")) map.removeSource("scene")
     map.addSource("scene", {

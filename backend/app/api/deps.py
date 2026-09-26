@@ -52,7 +52,10 @@ def _dev_user(db: psycopg.Connection) -> uuid.UUID:
 def get_current_user(request: Request, db: DbConn) -> uuid.UUID:
     auth = request.headers.get("authorization")
     if auth is None:
-        if get_settings().dev_user_email:
+        settings = get_settings()
+        # prod never falls back — the dev user is a local convenience only,
+        # so an accidentally-set EM_DEV_USER_EMAIL can't open the API
+        if settings.dev_user_email and settings.environment != "prod":
             return _dev_user(db)
         raise unauthorized()
     scheme, _, token = auth.partition(" ")

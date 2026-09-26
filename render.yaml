@@ -1,0 +1,23 @@
+# Render blueprint — API service only. The DB lives on Neon (Render's free
+# Postgres expires after 30 days) and ingestion runs on GH Actions cron —
+# Render cron jobs aren't free. See docs/deployment.md for the full runbook.
+services:
+  - type: web
+    name: earth-monitor-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: Dockerfile
+    healthCheckPath: /v1/health
+    autoDeploy: true
+    envVars:
+      - key: EM_ENVIRONMENT
+        value: prod
+      - key: EM_JWT_SECRET
+        generateValue: true
+      - key: EM_DEV_USER_EMAIL
+        value: ""  # prod ignores it anyway; explicit is clearer
+      - key: EM_DATABASE_URL
+        sync: false  # Neon pooled connection string — set in the dashboard
+      - key: EM_CORS_ORIGINS
+        sync: false  # JSON array, e.g. ["https://earth-monitor.pages.dev"]

@@ -1,0 +1,30 @@
+name: ingest
+
+on:
+  # GH cron is best-effort (can be delayed at peak times and auto-disables
+  # after 60 days of repo inactivity). Both are tolerable: the pipeline is
+  # watermark-based and idempotent, so a late or skipped run just shifts the
+  # next window — scenes are never missed.
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.9"
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: ingest sweep
+        env:
+          EM_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EM_ENVIRONMENT: prod
+        run: uv run python -m app.ingest --once

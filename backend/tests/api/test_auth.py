@@ -4,6 +4,7 @@ The no-header dev fallback keeps existing tests untouched; these exercise
 the real token path. All on the real test DB.
 """
 
+import pytest
 from starlette.testclient import TestClient
 
 USER = {"email": "clara@example.com", "password": "hunter22-long", "display_name": "Clara"}
@@ -78,4 +79,19 @@ def test_bad_token_rejected(client: TestClient) -> None:
 
     forged = jwt.encode({"sub": "00000000-0000-0000-0000-000000000000"}, "wrong", "HS256")
     r = client.get("/v1/aois", headers={"Authorization": f"Bearer {forged}"})
+    assert r.status_code == 401
+
+
+def test_dev_fallback_disabled_in_prod(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # an EM_DEV_USER_EMAIL left set in prod must not open the API
+    from app.api import deps
+    from app.config import Settings
+
+    prod = Settings(
+        environment="prod",
+        dev_user_email="dev@earth-monitor.local",
+        database_url="postgresql://unused/unused",
+    )
+    monkeypatch.setattr(deps, "get_settings", lambda: prod)
+    r = client.get("/v1/aois")
     assert r.status_code == 401

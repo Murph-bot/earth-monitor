@@ -9,11 +9,12 @@ Working name — rename freely; the codebase must not depend on it.
 
 ## Status
 
-**Phase 7 — web client.** Thin Vite/React/MapLibre frontend in `web/`:
-AOI draw/list/delete, scene browser overlaying live COG tiles, NDVI/NDWI
-charts — all through the generated client in `packages/shared`. Backend
-(Phases 1–6): schema, scheduled ingestion, NDVI/NDWI analysis, `/v1` API +
-dynamic tiles — all live on real Sentinel-2 data over Thessaly.
+**Phase 9 — deployable.** `render.yaml` blueprint (API), GH Actions cron
+(ingestion), `VITE_API_URL` split-origin plumbing, prod auth hardening —
+the human-side runbook is `docs/deployment.md` (Neon + Render + Pages).
+Phase 8 added JWT auth, per-user AOIs, and alert rules → in-app
+notifications; Phase 7 shipped the thin Vite/React/MapLibre client —
+all live-verified on real Sentinel-2 data over Thessaly.
 See `docs/` for the decision record, sensor matrix, and architecture.
 
 ## Dev quickstart
@@ -42,5 +43,6 @@ npm install && npm run dev                                      # web on :5173
 - `docs/sensor-matrix.md` — data source comparison
 - `docs/aoi-standard.md` — how areas of interest are represented
 - `docs/accounts-and-quotas.md` — every external account and its free-tier limits
-- `docs/adr/0001-*.md` — why data access is STAC-first multi-catalog
+- `docs/deployment.md` — the $0 production topology runbook
+- `docs/adr/` — why STAC-first, local Postgres, this free-tier topology
 - `docs/research/` — verified source notes with citations
