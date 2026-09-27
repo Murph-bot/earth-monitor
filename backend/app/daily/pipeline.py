@@ -7,6 +7,7 @@ upserts. An unpublished day stays missing and is retried next sweep.
 
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 import numpy as np
@@ -14,23 +15,31 @@ import psycopg
 import structlog
 
 from app.alerts.evaluate import evaluate_metric
-from app.daily import pdir_now
+from app.daily import pdir_now, temis
+from app.daily.grid import Bbox, Grid, aoi_mean
 
 log = structlog.get_logger()
 
-RAIN_SOURCE = "pdir-now"
-RAIN_METRIC = "rain_mm"
+
+@dataclass(frozen=True)
+class DailySource:
+    id: str  # sensors.id
+    metric_name: str
+    unit: str
+    grid: Grid
+    fetch: Callable[[date], np.ndarray | None]
 
 
-def ingest_rain(
-    conn: psycopg.Connection,
-    *,
-    today: date,
-    backfill_days: int,
-    fetch: Callable[[date], np.ndarray | None] = pdir_now.fetch_daily,
+RAIN = DailySource("pdir-now", "rain_mm", "mm", pdir_now.GRID, pdir_now.fetch_daily)
+UV = DailySource("temis-uv", "uv_index", "UVI", temis.GRID, temis.fetch_daily)
+DAILY_SOURCES = (RAIN, UV)
+
+
+def ingest_daily(
+    conn: psycopg.Connection, source: DailySource, *, today: date, backfill_days: int
 ) -> int:
-    """Fill missing daily rainfall for every AOI; returns rows written.
-    Today is excluded: its daily total is not complete yet."""
+    """Fill the source's missing days for every AOI; returns rows written.
+    Today is excluded: its daily value is not complete yet."""
     days = [today - timedelta(days=k) for k in range(backfill_days, 0, -1)]
     missing = conn.execute(
         """SELECT d::date, a.id,
@@ -41,39 +50,39 @@ def ingest_rain(
                WHERE m.aoi_id = a.id AND m.date = d
                  AND m.metric_name = %s AND m.source = %s)
            ORDER BY d""",
-        (days, RAIN_METRIC, RAIN_SOURCE),
+        (days, source.metric_name, source.id),
     ).fetchall()
-    by_day: dict[date, list[tuple[object, pdir_now.Bbox]]] = defaultdict(list)
+    by_day: dict[date, list[tuple[object, Bbox]]] = defaultdict(list)
     for day, aoi_id, minx, miny, maxx, maxy in missing:
         by_day[day].append((aoi_id, (minx, miny, maxx, maxy)))
 
     written = 0
     for day, aois in by_day.items():
-        grid = fetch(day)
-        if grid is None:
+        values = source.fetch(day)
+        if values is None:
             continue
         for aoi_id, bbox in aois:
-            mm = pdir_now.aoi_rain_mm(grid, bbox)
-            if mm is None:
+            value = aoi_mean(source.grid, values, bbox)
+            if value is None:
                 continue
             with conn.transaction():
                 conn.execute(
                     """INSERT INTO daily_metrics (aoi_id, date, metric_name, source, value, unit)
-                       VALUES (%s, %s, %s, %s, %s, 'mm')
+                       VALUES (%s, %s, %s, %s, %s, %s)
                        ON CONFLICT (aoi_id, metric_name, source, date)
                        DO UPDATE SET value = EXCLUDED.value""",
-                    (aoi_id, day, RAIN_METRIC, RAIN_SOURCE, mm),
+                    (aoi_id, day, source.metric_name, source.id, value, source.unit),
                 )
                 evaluate_metric(
                     conn,
                     aoi_id=aoi_id,
                     scene_id=None,
-                    sensor_id=RAIN_SOURCE,
-                    metric_name=RAIN_METRIC,
-                    value=mm,
+                    sensor_id=source.id,
+                    metric_name=source.metric_name,
+                    value=value,
                     valid_pixel_pct=1.0,
                     date=day,
                 )
             written += 1
-    log.info("rain_done", days_missing=len(by_day), rows_written=written)
+    log.info("daily_done", source=source.id, days_missing=len(by_day), rows_written=written)
     return written
