@@ -14,17 +14,17 @@ $0-budget topology — see ADR-0003 for why:
 ## 1. Neon (database)
 
 1. Create a project at neon.com (Postgres 16+, any region) — no card needed.
-2. Enable PostGIS:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS postgis;
-   ```
-3. Copy the **pooled** connection string (`postgresql://…-pooler…`).
-4. Migrate from a local checkout:
-   ```sh
-   cd backend
-   EM_DATABASE_URL='postgresql://…neon.tech/…?sslmode=require' \
-     uv run python -m app.db.migrate
-   ```
+2. Copy the **pooled** connection string (`postgresql://…-pooler…`).
+
+No manual schema step: the API container and every ingest sweep run
+`python -m app.db.migrate` first (it creates PostGIS and is safe to run
+concurrently). To migrate by hand anyway:
+
+```sh
+cd backend
+EM_DATABASE_URL='postgresql://…neon.tech/…?sslmode=require' \
+  uv run python -m app.db.migrate
+```
 
 ## 2. Render (API)
 

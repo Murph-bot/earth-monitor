@@ -20,10 +20,14 @@ See `docs/` for the decision record, sensor matrix, and architecture.
 ## Dev quickstart
 
 ```sh
-cd backend && uv sync && uv run uvicorn app.main:app --reload   # API on :8000
-docker compose up --build                                       # PostGIS + API
-npm install && npm run dev                                      # web on :5173
+docker compose up -d db                                         # PostGIS on :5432
+cd backend && uv sync && uv run python -m app.db.migrate        # schema
+uv run uvicorn app.main:app --reload                            # API on :8000
+npm install && npm run dev                                      # web on :5173 (repo root)
 ```
+
+Or `docker compose up --build` for PostGIS + API + worker; the containers
+migrate on boot.
 
 ## Layout
 

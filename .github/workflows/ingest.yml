@@ -23,6 +23,10 @@ jobs:
           version: "0.10.9"
           enable-cache: true
       - run: uv sync --frozen --no-dev
+      - name: migrate
+        env:
+          EM_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run python -m app.db.migrate
       - name: ingest sweep
         env:
           EM_DATABASE_URL: ${{ secrets.DATABASE_URL }}

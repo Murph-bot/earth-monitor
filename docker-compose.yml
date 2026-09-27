@@ -33,7 +33,7 @@ services:
   # Same image; the command swaps uvicorn for the poll loop.
   ingest:
     build: ./backend
-    command: ["python", "-m", "app.ingest"]
+    command: ["sh", "-c", "python -m app.db.migrate && exec python -m app.ingest"]
     env_file:
       - path: backend/.env
         required: false

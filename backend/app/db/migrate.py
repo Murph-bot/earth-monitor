@@ -15,6 +15,7 @@ from app.config import get_settings
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 MIGRATION_RE = re.compile(r"^(\d{4})_.*\.sql$")
+MIGRATE_LOCK = 0x656D6D67  # "emmg"
 
 
 def applied_versions(conn: psycopg.Connection) -> set[int]:
@@ -40,6 +41,10 @@ def migrate() -> list[int]:
     """Apply pending migrations; returns versions applied this call."""
     applied: list[int] = []
     with psycopg.connect(get_settings().database_url, cursor_factory=psycopg.ClientCursor) as conn:
+        # API and worker both migrate at boot; a concurrent run waits here,
+        # then sees the committed versions. xact-scoped so a transaction-mode
+        # pooler (Neon) can't strand it.
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (MIGRATE_LOCK,))
         done = applied_versions(conn)
         for version, path in pending():
             if version in done:
