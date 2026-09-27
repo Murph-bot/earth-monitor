@@ -33,23 +33,34 @@ class PendingPair:
     meta: SceneMeta
     aoi_id: str
     aoi_geom: GeoJSONGeom
+    missing: tuple[str, ...]  # metric names not yet written for this pair
 
 
-def _pending_pairs(conn: psycopg.Connection, sensor_id: str) -> list[PendingPair]:
-    """Every materialized (scene, aoi) coverage pair for the sensor."""
+def _pending_pairs(
+    conn: psycopg.Connection, sensor_id: str, metric_names: list[str]
+) -> list[PendingPair]:
+    """(scene, aoi) coverage pairs still missing at least one of the metrics.
+    Filtered in SQL: a sweep must not scale with the whole analyzed history."""
     rows = conn.execute(
         """SELECT s.id, s.scene_key, s.collection_id, c.catalog, s.acquired_at,
                   s.cloud_cover, s.epsg,
                   ST_XMin(s.bbox), ST_YMin(s.bbox), ST_XMax(s.bbox), ST_YMax(s.bbox),
                   ST_AsGeoJSON(s.footprint), s.assets, s.properties,
-                  a.id, ST_AsGeoJSON(a.geom)
+                  a.id, ST_AsGeoJSON(a.geom), pending.missing
            FROM scene_aois sa
            JOIN scenes s ON s.id = sa.scene_id
            JOIN collections c ON c.id = s.collection_id
            JOIN aois a ON a.id = sa.aoi_id
-           WHERE s.sensor_id = %s
+           CROSS JOIN LATERAL (
+               SELECT array_agg(n) AS missing
+               FROM unnest(%s::text[]) AS n
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM metrics m
+                   WHERE m.scene_id = s.id AND m.aoi_id = a.id AND m.metric_name = n)
+           ) pending
+           WHERE s.sensor_id = %s AND pending.missing IS NOT NULL
            ORDER BY s.acquired_at""",
-        (sensor_id,),
+        (metric_names, sensor_id),
     ).fetchall()
     return [
         PendingPair(
@@ -69,6 +80,7 @@ def _pending_pairs(conn: psycopg.Connection, sensor_id: str) -> list[PendingPair
             ),
             aoi_id=str(r[14]),
             aoi_geom=json.loads(r[15]),
+            missing=tuple(r[16]),
         )
         for r in rows
     ]
@@ -166,18 +178,10 @@ def analyze_pending(conn: psycopg.Connection, adapter: SensorAdapter) -> int:
     if not modules:
         return 0
 
+    by_name = {m.metric_name: m for m in modules}
     written = 0
-    for pair in _pending_pairs(conn, adapter.sensor_id):
-        have = {
-            r[0]
-            for r in conn.execute(
-                "SELECT metric_name FROM metrics WHERE scene_id = %s AND aoi_id = %s",
-                (pair.scene_id, pair.aoi_id),
-            ).fetchall()
-        }
-        missing = [m for m in modules if m.metric_name not in have]
-        if not missing:
-            continue
+    for pair in _pending_pairs(conn, adapter.sensor_id, list(by_name)):
+        missing = [by_name[name] for name in pair.missing]
         try:
             written += _analyze_pair(conn, adapter, pair, missing)
         except AdapterError as exc:

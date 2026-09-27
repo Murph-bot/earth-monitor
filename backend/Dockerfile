@@ -15,4 +15,5 @@ COPY app ./app
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["sh", "-c", "python -m app.db.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Render injects PORT (default 10000); compose and local runs fall back to 8000
+CMD ["sh", "-c", "python -m app.db.migrate && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

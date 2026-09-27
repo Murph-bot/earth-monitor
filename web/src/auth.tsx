@@ -36,15 +36,23 @@ export const AuthScreen = ({ onAuth }: { onAuth: () => void }) => {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const res =
-      mode === "login"
-        ? await client.POST("/v1/auth/login", { body: { email, password } })
-        : await client.POST("/v1/auth/register", {
-            body: { email, password, display_name: name || null },
-          })
-    setBusy(false)
+    let res
+    try {
+      res =
+        mode === "login"
+          ? await client.POST("/v1/auth/login", { body: { email, password } })
+          : await client.POST("/v1/auth/register", {
+              body: { email, password, display_name: name || null },
+            })
+    } catch {
+      setError("could not reach the server, try again in a moment")
+      return
+    } finally {
+      setBusy(false)
+    }
     if (res.error) {
-      const detail = (res.error as { message?: string }).message
+      // every API error is the envelope {"error": {"code", "message"}}
+      const detail = (res.error as { error?: { message?: string } }).error?.message
       setError(detail ?? "authentication failed")
       return
     }
