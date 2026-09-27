@@ -167,6 +167,46 @@ def test_scenes_and_tiles_scoped_to_owner(
         assert r.status_code == 404, f"{path} leaked to a non-owner: {r.status_code}"
 
 
+def test_landsat_tiles_read_signed_hrefs(
+    client: TestClient, clean: psycopg.Connection, aoi_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Planetary Computer blobs answer 409 without a SAS token; the tile path
+    # must sign exactly like the ingest path does
+    from datetime import timedelta
+
+    from app.adapters import landsat
+    from app.api.v1 import tiles
+
+    far = datetime.now(UTC) + timedelta(days=1)
+    monkeypatch.setattr(landsat, "_token_cache", {"landsat-c2-l2": ("sv=1&sig=t", far)})
+    seen: list[tuple[str, ...]] = []
+
+    def fake_render(hrefs: tuple[str, ...], *a: object) -> bytes:
+        seen.append(hrefs)
+        return b"png"
+
+    monkeypatch.setattr(tiles, "render_png", fake_render)
+    blob = "https://landsateuwest.blob.core.windows.net/c"
+    sid = clean.execute(
+        """INSERT INTO scenes (collection_id, sensor_id, scene_key, acquired_at,
+                               footprint, assets)
+           VALUES ('landsat-c2-l2', 'landsat-8-9', 'LC09_TEST', %s,
+                   ST_Multi(ST_GeomFromGeoJSON(%s)), %s)
+           RETURNING id""",
+        (
+            datetime(2026, 9, 24, 9, 0, tzinfo=UTC),
+            json.dumps(COVERING),
+            json.dumps({b: f"{blob}/{b}.TIF" for b in ("blue", "green", "red")}),
+        ),
+    ).fetchone()[0]
+    clean.execute(
+        "INSERT INTO scene_aois (scene_id, aoi_id, coverage) VALUES (%s, %s, 1)", (sid, aoi_id)
+    )
+
+    assert client.get(f"/v1/tiles/scenes/{sid}/10/576/389.png").status_code == 200
+    assert seen == [tuple(f"{blob}/{b}.TIF?sv=1&sig=t" for b in ("blue", "green", "red"))]
+
+
 def test_pagination(client: TestClient, clean: psycopg.Connection, aoi_id: str) -> None:
     for i in range(3):
         clean.execute(
