@@ -22,3 +22,23 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy app
       - run: uv run pytest -q
+      - name: generated client matches the API
+        run: |
+          uv run python -m scripts.dump_openapi
+          git diff --exit-code ../packages/shared/openapi.json
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: generated types match openapi.json
+        run: |
+          npm run gen -w @earth-monitor/shared
+          git diff --exit-code packages/shared/api-types.d.ts
+      - run: npm run typecheck -w @earth-monitor/shared
+      - run: npm run build -w @earth-monitor/web

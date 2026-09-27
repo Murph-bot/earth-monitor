@@ -7,6 +7,7 @@ thin consumers of the versioned `/v1` API.
 
 ```sh
 uv sync                  # install deps into .venv
+uv run python -m app.db.migrate   # apply schema (needs `docker compose up -d db`)
 uv run uvicorn app.main:app --reload
 uv run pytest            # tests
 uv run ruff check .      # lint

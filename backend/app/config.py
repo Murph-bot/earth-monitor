@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-change-me-0123456789abcdef"  # HS256; env in prod
     jwt_ttl_hours: int = 336  # 14 days
     max_aoi_area_km2: float = 500.0  # windowed reads scale with AOI area
+    rate_auth_per_minute: int = 10  # register + login, per client IP
+    rate_tiles_per_minute: int = 600  # a map pan loads dozens of tiles at once
 
     # ingestion worker (python -m app.ingest)
     ingest_backfill_days: int = 30  # first-run lookback when no watermark exists

@@ -13,8 +13,14 @@ from psycopg import errors as pg_errors
 log = structlog.get_logger()
 
 
-def envelope(code: str, message: str, status: int) -> JSONResponse:
-    return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
+def envelope(
+    code: str, message: str, status: int, headers: dict[str, str] | None = None
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status,
+        content={"error": {"code": code, "message": message}},
+        headers=headers,
+    )
 
 
 def install_handlers(app: FastAPI) -> None:
@@ -24,7 +30,8 @@ def install_handlers(app: FastAPI) -> None:
         code = (
             exc.headers.get("x-error-code") if exc.headers else None
         ) or f"HTTP_{exc.status_code}"
-        return envelope(code, detail, exc.status_code)
+        passthrough = {k: v for k, v in (exc.headers or {}).items() if k != "x-error-code"}
+        return envelope(code, detail, exc.status_code, passthrough)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exc(_req: Request, exc: RequestValidationError) -> JSONResponse:

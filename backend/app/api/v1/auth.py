@@ -13,10 +13,15 @@ from psycopg import errors as pg_errors
 
 from app.api.deps import CurrentUser, DbConn
 from app.api.errors import unauthorized
+from app.api.ratelimit import rate_limit
 from app.api.v1.schemas import LoginIn, RegisterIn, TokenOut, UserOut
+from app.config import get_settings
 from app.security import hash_password, issue_token, verify_password
 
 router = APIRouter()
+
+# one bucket for register + login: both are credential-guessing surfaces
+AUTH_LIMIT = rate_limit("auth", get_settings().rate_auth_per_minute)
 
 _dummy: str | None = None
 
@@ -38,7 +43,7 @@ def _user_out(row: tuple[object, ...]) -> UserOut:
     )
 
 
-@router.post("/auth/register", status_code=201)
+@router.post("/auth/register", status_code=201, dependencies=[AUTH_LIMIT])
 def register(body: RegisterIn, db: DbConn) -> TokenOut:
     email = body.email.lower()
     try:
@@ -57,7 +62,7 @@ def register(body: RegisterIn, db: DbConn) -> TokenOut:
     return TokenOut(token=issue_token(row[0]), user=_user_out(row))
 
 
-@router.post("/auth/login")
+@router.post("/auth/login", dependencies=[AUTH_LIMIT])
 def login(body: LoginIn, db: DbConn) -> TokenOut:
     row = db.execute(
         "SELECT id, email, display_name, password_hash FROM users WHERE email = %s",

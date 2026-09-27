@@ -95,3 +95,13 @@ def test_dev_fallback_disabled_in_prod(client: TestClient, monkeypatch: pytest.M
     monkeypatch.setattr(deps, "get_settings", lambda: prod)
     r = client.get("/v1/aois")
     assert r.status_code == 401
+
+
+def test_auth_rate_limited(client: TestClient) -> None:
+    body = {"email": "ghost@example.com", "password": "wrong-password"}
+    for _ in range(10):
+        assert client.post("/v1/auth/login", json=body).status_code == 401
+    r = client.post("/v1/auth/login", json=body)
+    assert r.status_code == 429
+    assert r.json()["error"]["code"] == "RATE_LIMITED"
+    assert r.headers["retry-after"] == "60"

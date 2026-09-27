@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg_pool import ConnectionPool
 
 from app.api.errors import install_handlers
+from app.api.ratelimit import Limiter
 from app.api.v1.router import router as v1_router
 from app.config import get_settings
 from app.logging import configure_logging
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.state.limiter = Limiter()
     install_handlers(app)
     app.add_middleware(
         CORSMiddleware,

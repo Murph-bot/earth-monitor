@@ -4,22 +4,28 @@ import json
 
 from fastapi import APIRouter
 
-from app.api.deps import DbConn
+from app.api.deps import CurrentUser, DbConn
 from app.api.errors import not_found
 from app.api.v1.schemas import Bbox, SceneDetail
 
 router = APIRouter()
 
+# A scene is visible to a user when it covers one of their AOIs; scenes
+# are a shared catalog, so ownership lives on the AOI side.
+VISIBLE_TO = """EXISTS (SELECT 1 FROM scene_aois sa JOIN aois a ON a.id = sa.aoi_id
+                         WHERE sa.scene_id = s.id AND a.user_id = %s)"""
+
 
 @router.get("/scenes/{scene_id}")
-def get_scene(scene_id: int, db: DbConn) -> SceneDetail:
+def get_scene(scene_id: int, db: DbConn, user_id: CurrentUser) -> SceneDetail:
     row = db.execute(
         """SELECT id, scene_key, sensor_id, collection_id, acquired_at, cloud_cover,
                   epsg, ST_AsGeoJSON(footprint),
                   ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox),
                   assets, properties
-           FROM scenes WHERE id = %s""",
-        (scene_id,),
+           FROM scenes s WHERE id = %s AND """
+        + VISIBLE_TO,
+        (scene_id, user_id),
     ).fetchone()
     if row is None:
         raise not_found("scene")
