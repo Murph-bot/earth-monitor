@@ -214,8 +214,8 @@ class NotificationOut(BaseModel):
 
 class MetricPoint(BaseModel):
     date: date
-    acquired_at: datetime
-    scene_id: int
+    acquired_at: datetime | None  # None for daily sources (rain, UV): no scene
+    scene_id: int | None
     value: float
     valid_pixel_pct: float
 

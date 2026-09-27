@@ -39,9 +39,11 @@ export const MetricChart = ({ series }: { series: MetricSeries }) => {
           className="stroke-emerald-400"
         />
         {coords.map((c) => (
-          <circle key={c.scene_id} cx={c.x} cy={c.y} r="2.5" className="fill-emerald-300">
+          <circle key={`${c.date}:${c.scene_id}`} cx={c.x} cy={c.y} r="2.5" className="fill-emerald-300">
             <title>
-              {c.date} — {c.value.toFixed(3)} ({Math.round(c.valid_pixel_pct * 100)}% valid)
+              {c.date} — {c.value.toFixed(3)}
+              {/* daily sources (rain, UV) have no scene and no pixel mask */}
+              {c.scene_id !== null && ` (${Math.round(c.valid_pixel_pct * 100)}% valid)`}
             </title>
           </circle>
         ))}

@@ -107,6 +107,27 @@ def test_aoi_scenes_and_metrics(client: TestClient, clean: psycopg.Connection, a
     assert filtered["series"] == []
 
 
+def test_metrics_include_daily_rain(
+    client: TestClient, clean: psycopg.Connection, aoi_id: str
+) -> None:
+    clean.execute(
+        """INSERT INTO daily_metrics (aoi_id, date, metric_name, source, value, unit)
+           VALUES (%s, '2026-09-25', 'rain_mm', 'pdir-now', 3.9, 'mm'),
+                  (%s, '2026-09-26', 'rain_mm', 'pdir-now', 0.0, 'mm')""",
+        (aoi_id, aoi_id),
+    )
+    series = client.get(f"/v1/aois/{aoi_id}/metrics").json()["series"]
+    rain = [s for s in series if s["metric_name"] == "rain_mm"]
+    assert len(rain) == 1
+    assert rain[0]["sensor_id"] == "pdir-now" and rain[0]["unit"] == "mm"
+    assert [(p["date"], p["value"], p["scene_id"]) for p in rain[0]["points"]] == [
+        ("2026-09-25", 3.9, None),
+        ("2026-09-26", 0.0, None),
+    ]
+    filtered = client.get(f"/v1/aois/{aoi_id}/metrics?metric=rain_mm&date_from=2026-09-26")
+    assert [p["value"] for p in filtered.json()["series"][0]["points"]] == [0.0]
+
+
 def test_sensors(client: TestClient) -> None:
     sensors = client.get("/v1/sensors").json()
     ids = {s["id"] for s in sensors["items"]}

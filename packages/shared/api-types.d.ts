@@ -493,13 +493,10 @@ export interface components {
              * Format: date
              */
             date: string;
-            /**
-             * Acquired At
-             * Format: date-time
-             */
-            acquired_at: string;
+            /** Acquired At */
+            acquired_at: string | null;
             /** Scene Id */
-            scene_id: number;
+            scene_id: number | null;
             /** Value */
             value: number;
             /** Valid Pixel Pct */
