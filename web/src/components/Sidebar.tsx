@@ -104,6 +104,6 @@ export const Sidebar = (p: Props) => (
       </div>
     )}
 
-    {p.selectedAoi && <RulesPanel aoiId={p.selectedAoi.id} series={p.metrics?.series ?? []} />}
+    {p.selectedAoi && <RulesPanel key={p.selectedAoi.id} aoiId={p.selectedAoi.id} series={p.metrics?.series ?? []} />}
   </aside>
 )

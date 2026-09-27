@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type maplibregl from "maplibre-gl"
 import { API_BASE, client, type Aoi, type MetricsResponse, type SceneSummary } from "./api"
-import { AuthScreen, clearToken, getToken } from "./auth"
+import { AuthScreen, clearToken } from "./auth"
 import { EMPTY_FC, initMap, rectFeature, setGeoData } from "./map"
 import { NotificationsBell } from "./components/NotificationsBell"
 import { Sidebar } from "./components/Sidebar"
@@ -12,6 +12,10 @@ interface TileJson {
   minzoom?: number
   maxzoom?: number
 }
+
+type AuthState = "probing" | "in" | "out" | "unreachable"
+
+const RETRY_MS = 5000
 
 const fc = (feature: GeoJSON.Feature): GeoJSON.FeatureCollection => ({
   type: "FeatureCollection",
@@ -35,29 +39,49 @@ export const App = () => {
   const [pendingGeom, setPendingGeom] = useState<GeoJSON.Polygon | null>(null)
   const [draftName, setDraftName] = useState("")
   const [notice, setNotice] = useState<string | null>(null)
-  // null = still probing; the API answers 200 without a token when the dev
-  // fallback is on, so auth screen appears only when the backend demands one
-  const [authed, setAuthed] = useState<boolean | null>(null)
+  // "unreachable" covers Render's free-tier cold start (30-60 s) and outages;
+  // the API answers 200 without a token when the dev fallback is on, so the
+  // auth screen appears only when the backend demands one
+  const [auth, setAuth] = useState<AuthState>("probing")
+  const selectedAoiId = useRef<string | null>(null)
 
   drawRef.current.active = drawMode
 
   const refreshAois = useCallback(async () => {
-    const { data, error, response } = await client.GET("/v1/aois")
-    if (response.status === 401) {
-      setAuthed(false)
-      return
+    try {
+      const { data, response } = await client.GET("/v1/aois")
+      if (response.status === 401) return setAuth("out")
+      if (!data) return setNotice(`could not load your areas (HTTP ${response.status})`)
+      setAois(data.items)
+    } catch {
+      setNotice("could not reach the server")
     }
-    setAois(error ? [] : (data?.items ?? []))
   }, [])
 
   useEffect(() => {
-    // probe: tokenless 200 -> dev mode; 401 -> auth screen; token -> straight in
-    if (getToken()) {
-      setAuthed(true)
-      return
+    // probe: 200 -> in (dev fallback or valid token); 401 -> auth screen;
+    // network error or 5xx -> keep retrying while the server wakes
+    if (auth !== "probing" && auth !== "unreachable") return
+    let cancelled = false
+    const probe = async () => {
+      let next: AuthState = "unreachable"
+      try {
+        const { response } = await client.GET("/v1/aois")
+        if (response.status === 401) next = "out"
+        else if (response.ok) next = "in"
+      } catch {
+        // fetch threw: cold start, DNS, or CORS
+      }
+      if (cancelled) return
+      setAuth(next)
+      if (next === "unreachable") timer = setTimeout(probe, RETRY_MS)
     }
-    void client.GET("/v1/aois").then((r) => setAuthed(r.response.status !== 401))
-  }, [])
+    let timer = setTimeout(probe, 0)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [auth])
 
   // --- map lifecycle -------------------------------------------------------
   useEffect(() => {
@@ -112,14 +136,15 @@ export const App = () => {
       mapRef.current = null
       map.remove()
     }
-  }, [authed])
+  }, [auth])
 
   useEffect(() => {
-    if (authed) void refreshAois()
-  }, [authed, refreshAois])
+    if (auth === "in") void refreshAois()
+  }, [auth, refreshAois])
 
   // --- interactions ----------------------------------------------------------
   const handleSelectAoi = useCallback(async (a: Aoi) => {
+    selectedAoiId.current = a.id
     setSelectedAoi(a)
     setSelectedScene(null)
     const map = mapRef.current
@@ -128,6 +153,8 @@ export const App = () => {
       client.GET("/v1/aois/{aoi_id}/scenes", { params: { path: { aoi_id: a.id } } }),
       client.GET("/v1/aois/{aoi_id}/metrics", { params: { path: { aoi_id: a.id } } }),
     ])
+    // a later click owns the panel; drop responses for an AOI no longer selected
+    if (selectedAoiId.current !== a.id) return
     setScenes(scenesRes.data?.items ?? [])
     setMetrics(metricsRes.data ?? null)
     if (map?.isStyleLoaded() && detailRes.data) {
@@ -211,8 +238,17 @@ export const App = () => {
   }, [])
 
   // --- render ----------------------------------------------------------------
-  if (authed === null) return <div className="h-screen bg-zinc-950" />
-  if (!authed) return <AuthScreen onAuth={() => setAuthed(true)} />
+  if (auth === "probing") return <div className="h-screen bg-zinc-950" />
+  if (auth === "unreachable")
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-zinc-950 text-sm text-zinc-400">
+        <p>Waking up the server…</p>
+        <p className="text-xs text-zinc-600">
+          Free hosting sleeps when idle; this can take up to a minute. Retrying automatically.
+        </p>
+      </div>
+    )
+  if (auth === "out") return <AuthScreen onAuth={() => setAuth("in")} />
 
   return (
     <div className="flex h-screen flex-col">
@@ -226,7 +262,7 @@ export const App = () => {
           <button
             onClick={() => {
               clearToken()
-              setAuthed(false)
+              setAuth("out")
             }}
             className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
           >
