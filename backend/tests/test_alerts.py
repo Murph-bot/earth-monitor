@@ -56,8 +56,8 @@ def _rule(
         db.execute(
             """INSERT INTO alert_rules
                    (aoi_id, user_id, metric_name, rule_type, params,
-                    sensor_id, min_valid_pixel_pct, enabled)
-               VALUES (%s, %s, 'ndvi_mean', %s, %s, %s, %s, %s) RETURNING id""",
+                    sensor_id, min_valid_pixel_pct, enabled, created_at)
+               VALUES (%s, %s, 'ndvi_mean', %s, %s, %s, %s, %s, %s) RETURNING id""",
             (
                 aoi,
                 uid,
@@ -66,6 +66,7 @@ def _rule(
                 kw.get("sensor_id"),
                 kw.get("min_valid_pixel_pct", 0.5),
                 kw.get("enabled", True),
+                kw.get("created_at", datetime(2026, 9, 1, tzinfo=UTC)),
             ),
         ).fetchone()[0]
     )
@@ -105,6 +106,15 @@ def test_threshold_fires_and_dedups(clean: psycopg.Connection, aoi_scene: tuple)
     # re-analysis of the same scene must not re-notify
     assert _eval(clean, aoi, sid, value=0.2) == 0
     assert len(_notifications(clean)) == 1
+
+
+def test_scene_older_than_rule_does_not_fire(clean: psycopg.Connection, aoi_scene: tuple) -> None:
+    uid, aoi, sid = aoi_scene
+    # the scene was acquired 2026-09-24; a rule made the next day must not
+    # fire on it when a history backfill analyzes it later
+    _rule(clean, aoi, uid, {"op": "lt", "value": 0.3}, created_at=datetime(2026, 9, 25, tzinfo=UTC))
+    assert _eval(clean, aoi, sid, value=0.2) == 0
+    assert _notifications(clean) == []
 
 
 def test_threshold_no_fire(clean: psycopg.Connection, aoi_scene: tuple) -> None:
