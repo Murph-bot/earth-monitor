@@ -147,13 +147,13 @@ def test_ingest_failure_marks_run_failed(db: psycopg.Connection, aoi_id: str) ->
 
 
 def test_due_sensors(clean: psycopg.Connection) -> None:
-    assert due_sensors(clean, get_settings()) == ["sentinel-2"]
+    assert due_sensors(clean, get_settings()) == ["sentinel-2", "landsat-8-9"]
 
     clean.execute(
         "INSERT INTO ingestion_runs (sensor_id, status, finished_at) "
         "VALUES ('sentinel-2', 'success', now())"
     )
-    assert due_sensors(clean, get_settings()) == []  # fresh success → not due
+    assert due_sensors(clean, get_settings()) == ["landsat-8-9"]  # fresh success → not due
 
 
 def test_poll_interval_hours() -> None:

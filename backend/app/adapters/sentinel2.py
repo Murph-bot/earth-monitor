@@ -18,12 +18,9 @@ from typing import Any
 
 import numpy as np
 import pystac_client
-import rasterio
-from rasterio.crs import CRS
 from rasterio.errors import RasterioIOError
-from rasterio.mask import mask as rio_mask
-from rasterio.warp import Resampling, reproject, transform_geom
 
+from app.adapters._cog import align_mask, read_band
 from app.adapters._retry import with_retry
 from app.adapters.base import (
     AdapterError,
@@ -116,37 +113,13 @@ class Sentinel2Adapter(SensorAdapter):
                 continue
 
             try:
-                window = with_retry(partial(self._read_band, href, aoi, spec))
+                window = with_retry(partial(read_band, href, aoi, spec))
             except RasterioIOError as exc:
                 raise AdapterError(f"COG read failed for {spec.asset_key}: {exc}") from exc
             if window is not None:
                 windows[name] = window
 
         return SceneWindow(scene=scene, aoi=aoi, bands=windows)
-
-    @staticmethod
-    def _read_band(href: str, aoi: GeoJSONGeom, spec: BandSpec) -> BandWindow | None:
-        """One COG windowed read, clipped to the AOI in the dataset's CRS.
-
-        Returns None when the AOI sits outside the scene's data footprint —
-        tile edges end before the tile's bounding box does.
-
-        Science bands are returned in PHYSICAL units (scale/dn_offset applied —
-        preprocessing lives in the adapter, per the module split). Quality
-        bands stay raw integers: class ids are labels, not quantities. DN 0 is
-        nodata/fill both before and after scaling (0*scale+offset lands at the
-        offset floor, and SCL=0 masks those pixels anyway).
-        """
-        with rasterio.open(href) as ds:
-            geom = transform_geom("EPSG:4326", ds.crs, aoi)
-            try:
-                arr, transform = rio_mask(ds, [geom], crop=True, filled=True, nodata=0)
-            except ValueError:
-                return None
-            band = arr[0]
-            if spec.kind != "quality":
-                band = band.astype(np.float32) * spec.scale + spec.dn_offset
-            return BandWindow(array=band, transform=transform, epsg=ds.crs.to_epsg() or 0)
 
     def quality_mask(self, window: SceneWindow) -> BandWindow:
         scl = window.bands.get("scl")
@@ -159,23 +132,8 @@ class Sentinel2Adapter(SensorAdapter):
         ref = min(science, key=lambda w: w.transform.a)  # finest grid wins
 
         valid = np.isin(scl.array, list(VALID_SCL_CLASSES))
-        if valid.shape != ref.array.shape:
-            # SCL is 20 m; science bands may be 10 m. Nearest-neighbor onto the
-            # reference grid — a conservative choice (a masked 20 m cell kills
-            # the four 10 m cells it covers).
-            aligned = np.zeros(ref.array.shape, dtype=np.uint8)
-            reproject(
-                source=valid.astype(np.uint8),
-                destination=aligned,
-                src_transform=scl.transform,
-                src_crs=CRS.from_epsg(scl.epsg),
-                dst_transform=ref.transform,
-                dst_crs=CRS.from_epsg(ref.epsg),
-                resampling=Resampling.nearest,
-            )
-            valid = aligned.astype(bool)
-
-        return BandWindow(array=valid, transform=ref.transform, epsg=ref.epsg)
+        # SCL is 20 m; science bands may be 10 m
+        return align_mask(valid, scl, ref)
 
     @staticmethod
     def _to_scene(item: dict[str, Any]) -> SceneMeta:

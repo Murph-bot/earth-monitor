@@ -42,7 +42,7 @@ class Ndvi(AnalysisModule):
     """(nir - red) / (nir + red): vegetation vigor, [-1, 1]."""
 
     name = "ndvi"
-    sensors = ("sentinel-2", "landsat-8-9")  # landsat activates when its adapter lands
+    sensors = ("sentinel-2",)
     required_bands = ("red", "nir")
     metric_name = "ndvi_mean"
     unit = "index"
@@ -55,10 +55,33 @@ class Ndwi(AnalysisModule):
     """(green - nir) / (green + nir): open water, McFeeters 1996."""
 
     name = "ndwi"
-    sensors = ("sentinel-2", "landsat-8-9")
+    sensors = ("sentinel-2",)
     required_bands = ("green", "nir")
     metric_name = "ndwi_mean"
     unit = "index"
 
     def compute(self, window: SceneWindow, mask: BandWindow) -> float | None:
         return _masked_index_mean(window, mask, "green", "nir")
+
+
+class SurfaceTemperature(AnalysisModule):
+    """Land surface temperature: masked mean of the thermal band, in °C.
+    The ground's skin temperature at overpass, not air temperature."""
+
+    name = "lst"
+    sensors = ("landsat-8-9",)
+    required_bands = ("lwir",)
+    metric_name = "lst_mean"
+    unit = "degC"
+
+    def compute(self, window: SceneWindow, mask: BandWindow) -> float | None:
+        if "lwir" not in window.bands:
+            return None
+        kelvin = window.bands["lwir"].array.astype(np.float64)
+        valid = mask.array.astype(bool)
+        if kelvin.shape != valid.shape:
+            raise AnalysisError(f"grid mismatch: lwir {kelvin.shape} vs mask {valid.shape}")
+        sel = valid & np.isfinite(kelvin)
+        if not sel.any():
+            return None
+        return float(kelvin[sel].mean() - 273.15)

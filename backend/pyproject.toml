@@ -17,6 +17,7 @@ dependencies = [
     "pillow>=10",
     "pyjwt>=2.10",
     "email-validator>=2.2",
+    "requests>=2.34.2",
 ]
 
 [dependency-groups]

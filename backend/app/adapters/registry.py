@@ -5,9 +5,12 @@ never imports a concrete class.
 """
 
 from app.adapters.base import SensorAdapter
+from app.adapters.landsat import LandsatAdapter
 from app.adapters.sentinel2 import Sentinel2Adapter
 
-_ADAPTERS: dict[str, SensorAdapter] = {a.sensor_id: a for a in [Sentinel2Adapter()]}
+_ADAPTERS: dict[str, SensorAdapter] = {
+    a.sensor_id: a for a in [Sentinel2Adapter(), LandsatAdapter()]
+}
 
 
 def get_adapter(sensor_id: str) -> SensorAdapter:
