@@ -1,8 +1,9 @@
+import re
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -19,7 +20,11 @@ class Settings(BaseSettings):
     environment: Literal["dev", "test", "prod"] = "dev"
     log_level: str = "INFO"
     database_url: str = "postgresql://postgres:postgres@localhost:5432/earth_monitor"
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # pasted by hand into dashboards: JSON array or comma list, any quotes
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
 
     # api
     dev_user_email: str | None = "dev@earth-monitor.local"  # used only when no
@@ -37,6 +42,15 @@ class Settings(BaseSettings):
     ingest_interval_hours: float | None = None  # set to override all sensor cadences
     ingest_tick_seconds: int = 60  # scheduler wake-up granularity
     ingest_analyze: bool = True  # False = catalog-only sweeps (no pixel reads)
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _origins(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
+        # browsers send Origin without a trailing slash, so match that form
+        parts = re.split(r"[,\s]+", re.sub("[\\[\\]\"'\u201c\u201d\u2018\u2019]", "", v))
+        return [o.rstrip("/") for o in parts if o]
 
     @field_validator("database_url")
     @classmethod
