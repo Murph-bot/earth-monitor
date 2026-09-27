@@ -97,7 +97,9 @@ def test_dev_fallback_disabled_in_prod(client: TestClient, monkeypatch: pytest.M
     assert r.status_code == 401
 
 
-def test_auth_rate_limited(client: TestClient) -> None:
+def test_auth_rate_limited(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # pin the clock: 11 requests straddling a minute boundary would reset the window
+    monkeypatch.setattr("app.api.ratelimit.time.monotonic", lambda: 120.0)
     body = {"email": "ghost@example.com", "password": "wrong-password"}
     for _ in range(10):
         assert client.post("/v1/auth/login", json=body).status_code == 401
