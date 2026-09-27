@@ -3,19 +3,22 @@
 GET /v1/tiles/scenes/{id}/tilejson.json  -> MapLibre source descriptor
 GET /v1/tiles/scenes/{id}/{z}/{x}/{y}.png -> rendered RGB(A) tile
 
-Scene pixels are immutable, so tiles are HTTP-cacheable for 24h and
-LRU-cached in process. Band choice: ?assets=blue,green,red (defaults to
-the sensor's blue/green/red bands for truecolor).
+Scene pixels are immutable, so tiles are browser-cacheable for 24h and
+LRU-cached in process. Tiles are owner-scoped, hence `private`. Band
+choice: ?assets=blue,green,red (defaults to the sensor's blue/green/red
+bands for truecolor).
 """
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from rio_tiler.errors import TileOutsideBounds
 
-from app.api.deps import DbConn
+from app.api.deps import CurrentUser, DbConn
 from app.api.errors import not_found
+from app.api.v1.scenes import VISIBLE_TO
 from app.tiles.render import render_png
 
 router = APIRouter()
@@ -23,12 +26,13 @@ router = APIRouter()
 _DEFAULT_RGB = ("blue", "green", "red")
 
 
-def _scene_for_tiles(db: Any, scene_id: int) -> tuple[Any, ...]:
+def _scene_for_tiles(db: Any, scene_id: int, user_id: UUID) -> tuple[Any, ...]:
     row: tuple[Any, ...] | None = db.execute(
         """SELECT s.sensor_id, s.assets, s.collection_id,
                   ST_XMin(s.bbox), ST_YMin(s.bbox), ST_XMax(s.bbox), ST_YMax(s.bbox)
-           FROM scenes s WHERE s.id = %s""",
-        (scene_id,),
+           FROM scenes s WHERE s.id = %s AND """
+        + VISIBLE_TO,
+        (scene_id, user_id),
     ).fetchone()
     if row is None:
         raise not_found("scene")
@@ -66,8 +70,8 @@ def _pick_hrefs(
 
 
 @router.get("/tiles/scenes/{scene_id}/tilejson.json")
-def tilejson(scene_id: int, request: Request, db: DbConn) -> dict[str, Any]:
-    sensor_id, _assets, _col, minx, miny, maxx, maxy = _scene_for_tiles(db, scene_id)
+def tilejson(scene_id: int, request: Request, db: DbConn, user_id: CurrentUser) -> dict[str, Any]:
+    sensor_id, _assets, _col, minx, miny, maxx, maxy = _scene_for_tiles(db, scene_id, user_id)
     lic = db.execute("SELECT license_text FROM sensors WHERE id = %s", (sensor_id,)).fetchone()
     base = str(request.base_url).rstrip("/")
     return {
@@ -88,12 +92,13 @@ def tile_png(
     x: int,
     y: int,
     db: DbConn,
+    user_id: CurrentUser,
     assets: str | None = Query(None, description="comma-separated band names"),
     stretch: float = Query(0.3, gt=0, le=10, description="reflectance display max"),
 ) -> Response:
     if not (0 <= z <= 24 and 0 <= x < (1 << z) and 0 <= y < (1 << z)):
         raise HTTPException(422, "invalid tile address")
-    sensor_id, scene_assets, _col, *_ = _scene_for_tiles(db, scene_id)
+    sensor_id, scene_assets, _col, *_ = _scene_for_tiles(db, scene_id, user_id)
     hrefs, scale_offsets = _pick_hrefs(db, sensor_id, dict(scene_assets), assets)
     try:
         png = render_png(hrefs, scale_offsets, stretch, x, y, z)
@@ -102,5 +107,5 @@ def tile_png(
     return Response(
         content=png,
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400, immutable"},
+        headers={"Cache-Control": "private, max-age=86400, immutable"},
     )

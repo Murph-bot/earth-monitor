@@ -1,4 +1,5 @@
 import maplibregl from "maplibre-gl"
+import { getToken } from "./auth"
 
 // MapLibre, no token: OSM raster basemap for orientation — scene imagery is
 // the product layer rendered by our own /v1/tiles endpoints.
@@ -26,6 +27,14 @@ export const initMap = (container: HTMLElement) =>
     // keeps the WebGL buffer readable — headless screenshots & future
     // "export view as image" both need it; minor perf cost
     canvasContextAttributes: { preserveDrawingBuffer: true },
+    // scene tiles are owner-scoped; MapLibre fetches them itself, outside
+    // the API client's auth middleware
+    transformRequest: (url) => {
+      const t = getToken()
+      return t && url.includes("/v1/tiles/")
+        ? { url, headers: { Authorization: `Bearer ${t}` } }
+        : { url }
+    },
   })
 
 export const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
