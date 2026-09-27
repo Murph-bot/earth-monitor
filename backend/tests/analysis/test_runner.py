@@ -124,6 +124,24 @@ def test_analysis_self_heals(db: psycopg.Connection, aoi_id: str) -> None:
     assert analyze_pending(db, adapter) == 0  # converged
 
 
+def test_scene_without_usable_pixels_is_read_once(db: psycopg.Connection, aoi_id: str) -> None:
+    adapter = FakeReadAdapter([_meta("S1")], scl_class=9)  # SCL 9: cloud, high probability
+    reads: list[str] = []
+    orig = adapter.read
+
+    def counting_read(scene, aoi, bands):  # type: ignore[no-untyped-def]
+        reads.append(scene.scene_id)
+        return orig(scene, aoi, bands)
+
+    adapter.read = counting_read  # type: ignore[method-assign]
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48)
+    assert db.execute("SELECT count(*) FROM metrics").fetchone()[0] == 0
+
+    # the next sweep must not download the same fully-clouded scene again
+    assert analyze_pending(db, adapter) == 0
+    assert reads == ["S1"]
+
+
 def test_partial_mask_valid_pct(db: psycopg.Connection, aoi_id: str) -> None:
     adapter = FakeReadAdapter([_meta("S1")], scl_class=4)
     # half the SCL pixels cloudy -> valid_pixel_pct = 0.5, metrics still written

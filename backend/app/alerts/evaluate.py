@@ -7,6 +7,9 @@ Two rule types:
                         more than pct. A field-specific baseline: harvest
                         phenology beats a global NDVI cutoff.
 
+A rule only fires on scenes acquired on or after the day it was created:
+the 30-day backfill of a new AOI must not replay old imagery as alerts.
+
 Every fired rule writes one 'in_app' notification row. The
 UNIQUE(alert_rule_id, scene_id) anchor makes re-analysis a no-op — the same
 scene can never notify twice for the same rule.
@@ -70,8 +73,9 @@ def evaluate_metric(
            FROM alert_rules r JOIN aois a ON a.id = r.aoi_id
            WHERE r.aoi_id = %s AND r.metric_name = %s AND r.enabled
              AND (r.sensor_id IS NULL OR r.sensor_id = %s)
-             AND %s >= r.min_valid_pixel_pct""",
-        (aoi_id, metric_name, sensor_id, valid_pixel_pct),
+             AND %s >= r.min_valid_pixel_pct
+             AND %s >= r.created_at::date""",
+        (aoi_id, metric_name, sensor_id, valid_pixel_pct, date),
     ).fetchall()
 
     fired = 0
