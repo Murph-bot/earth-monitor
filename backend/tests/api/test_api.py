@@ -149,6 +149,24 @@ def test_tiles(client: TestClient, clean: psycopg.Connection, aoi_id: str) -> No
     assert r.status_code == 422 and "unknown bands" in r.json()["error"]["message"]
 
 
+def test_scenes_and_tiles_scoped_to_owner(
+    client: TestClient, clean: psycopg.Connection, aoi_id: str
+) -> None:
+    scene_id = _insert_scene_with_coverage(clean, aoi_id)
+    r = client.post(
+        "/v1/auth/register", json={"email": "other@example.com", "password": "long-enough-pw"}
+    )
+    other = {"Authorization": f"Bearer {r.json()['token']}"}
+
+    for path in (
+        f"/v1/scenes/{scene_id}",
+        f"/v1/tiles/scenes/{scene_id}/tilejson.json",
+        f"/v1/tiles/scenes/{scene_id}/10/500/400.png",
+    ):
+        r = client.get(path, headers=other)
+        assert r.status_code == 404, f"{path} leaked to a non-owner: {r.status_code}"
+
+
 def test_pagination(client: TestClient, clean: psycopg.Connection, aoi_id: str) -> None:
     for i in range(3):
         clean.execute(
