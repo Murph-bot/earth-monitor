@@ -13,6 +13,8 @@ services:
     envVars:
       - key: EM_ENVIRONMENT
         value: prod
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"  # uvicorn: trust Render's X-Forwarded-For so rate limits key on the real client
       - key: EM_JWT_SECRET
         generateValue: true
       - key: EM_DEV_USER_EMAIL

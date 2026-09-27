@@ -18,7 +18,9 @@ from rio_tiler.errors import TileOutsideBounds
 
 from app.api.deps import CurrentUser, DbConn
 from app.api.errors import not_found
+from app.api.ratelimit import rate_limit
 from app.api.v1.scenes import VISIBLE_TO
+from app.config import get_settings
 from app.tiles.render import render_png
 
 router = APIRouter()
@@ -85,7 +87,10 @@ def tilejson(scene_id: int, request: Request, db: DbConn, user_id: CurrentUser) 
     }
 
 
-@router.get("/tiles/scenes/{scene_id}/{z}/{x}/{y}.png")
+@router.get(
+    "/tiles/scenes/{scene_id}/{z}/{x}/{y}.png",
+    dependencies=[rate_limit("tiles", get_settings().rate_tiles_per_minute)],
+)
 def tile_png(
     scene_id: int,
     z: int,
