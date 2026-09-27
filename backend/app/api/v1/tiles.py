@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from rio_tiler.errors import TileOutsideBounds
 
+from app.adapters.registry import get_adapter
 from app.api.deps import CurrentUser, DbConn
 from app.api.errors import not_found
 from app.api.ratelimit import rate_limit
@@ -105,6 +106,8 @@ def tile_png(
         raise HTTPException(422, "invalid tile address")
     sensor_id, scene_assets, _col, *_ = _scene_for_tiles(db, scene_id, user_id)
     hrefs, scale_offsets = _pick_hrefs(db, sensor_id, dict(scene_assets), assets)
+    adapter = get_adapter(sensor_id)
+    hrefs = tuple(adapter.readable_href(h) for h in hrefs)
     try:
         png = render_png(hrefs, scale_offsets, stretch, x, y, z)
     except TileOutsideBounds:

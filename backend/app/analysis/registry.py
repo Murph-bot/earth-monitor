@@ -1,9 +1,9 @@
 """Module registry — one place to add an analysis module."""
 
 from app.analysis.base import AnalysisModule
-from app.analysis.indices import Ndvi, Ndwi
+from app.analysis.indices import Ndvi, Ndwi, SurfaceTemperature
 
-_MODULES: list[AnalysisModule] = [Ndvi(), Ndwi()]
+_MODULES: list[AnalysisModule] = [Ndvi(), Ndwi(), SurfaceTemperature()]
 
 
 def all_modules() -> list[AnalysisModule]:

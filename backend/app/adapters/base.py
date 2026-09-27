@@ -97,6 +97,12 @@ class SensorAdapter(ABC):
     # mask then means "inside the AOI polygon" only)
     mask_band: str | None = None
 
+    def readable_href(self, href: str) -> str:
+        """The URL to open for an asset href. Catalogs that gate their blobs
+        (Planetary Computer's SAS tokens) override this; ingest and the tile
+        renderer both go through it."""
+        return href
+
     @abstractmethod
     def search(
         self,
