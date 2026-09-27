@@ -57,6 +57,9 @@ def _pending_pairs(
                WHERE NOT EXISTS (
                    SELECT 1 FROM metrics m
                    WHERE m.scene_id = s.id AND m.aoi_id = a.id AND m.metric_name = n)
+                 AND NOT EXISTS (
+                   SELECT 1 FROM metric_gaps g
+                   WHERE g.scene_id = s.id AND g.aoi_id = a.id AND g.metric_name = n)
            ) pending
            WHERE s.sensor_id = %s AND pending.missing IS NOT NULL
            ORDER BY s.acquired_at""",
@@ -99,6 +102,17 @@ def _inside_aoi(
     )
 
 
+def _record_gaps(
+    conn: psycopg.Connection, pair: PendingPair, metric_names: list[str], reason: str
+) -> None:
+    for name in metric_names:
+        conn.execute(
+            """INSERT INTO metric_gaps (aoi_id, scene_id, metric_name, reason)
+               VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING""",
+            (pair.aoi_id, pair.scene_id, name, reason),
+        )
+
+
 def _analyze_pair(
     conn: psycopg.Connection,
     adapter: SensorAdapter,
@@ -110,7 +124,9 @@ def _analyze_pair(
         bands.append(adapter.mask_band)
     window = adapter.read(pair.meta, pair.aoi_geom, bands)
     if not window.bands:
-        return 0  # tile-edge scene: footprint intersects, data doesn't
+        # tile-edge scene: footprint intersects, data doesn't
+        _record_gaps(conn, pair, [m.metric_name for m in modules], "no_data")
+        return 0
 
     if adapter.mask_band and adapter.mask_band in window.bands:
         mask = adapter.quality_mask(window)
@@ -127,6 +143,7 @@ def _analyze_pair(
     inside = _inside_aoi(pair.aoi_geom, mask.array.shape, mask.transform, mask.epsg)
     n_inside = int(inside.sum())
     if n_inside == 0:
+        _record_gaps(conn, pair, [m.metric_name for m in modules], "no_data")
         return 0
     valid_pct = float((mask.array.astype(bool) & inside).sum() / n_inside)
 
@@ -135,6 +152,7 @@ def _analyze_pair(
         for module in modules:
             value = module.compute(window, mask)
             if value is None:
+                _record_gaps(conn, pair, [module.metric_name], "no_valid_pixels")
                 continue
             conn.execute(
                 """INSERT INTO metrics (aoi_id, scene_id, sensor_id, date,
