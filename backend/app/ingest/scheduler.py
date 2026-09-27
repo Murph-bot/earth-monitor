@@ -19,6 +19,7 @@ import structlog
 
 from app.adapters.registry import all_adapters, get_adapter
 from app.config import Settings
+from app.daily.pipeline import RAIN_SOURCE, ingest_rain
 from app.ingest.pipeline import ingest_sensor
 
 log = structlog.get_logger()
@@ -71,6 +72,13 @@ def run_due(conn: psycopg.Connection, settings: Settings, *, force: bool = False
         except Exception:
             # per-sensor isolation: a failed adapter doesn't stop the sweep
             log.exception("sensor_sweep_failed", sensor_id=sensor_id)
+    if _is_enabled(conn, RAIN_SOURCE):
+        try:
+            ingest_rain(
+                conn, today=datetime.now(UTC).date(), backfill_days=settings.ingest_backfill_days
+            )
+        except Exception:
+            log.exception("rain_sweep_failed")
 
 
 def _is_enabled(conn: psycopg.Connection, sensor_id: str) -> bool:

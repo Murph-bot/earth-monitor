@@ -12,7 +12,8 @@ the 30-day backfill of a new AOI must not replay old imagery as alerts.
 
 Every fired rule writes one 'in_app' notification row. The
 UNIQUE(alert_rule_id, scene_id) anchor makes re-analysis a no-op — the same
-scene can never notify twice for the same rule.
+scene can never notify twice for the same rule. Daily values have no scene;
+their anchor is (alert_rule_id, metric_date).
 """
 
 import operator
@@ -32,7 +33,7 @@ _OP_WORDS = {"lt": "below", "lte": "at or below", "gt": "above", "gte": "at or a
 def _baseline_hit(
     conn: psycopg.Connection,
     aoi_id: object,
-    scene_id: int,
+    scene_id: int | None,
     metric_name: str,
     value: float,
     on_date: date,
@@ -40,13 +41,21 @@ def _baseline_hit(
 ) -> tuple[bool, str]:
     days = int(params.get("days", 90))
     pct = float(params.get("pct", 0.2))
-    row = conn.execute(
-        """SELECT avg(value), count(*) FROM metrics
-           WHERE aoi_id = %s AND metric_name = %s AND scene_id != %s
-             AND valid_pixel_pct >= 0.5
-             AND date >= %s::date - (%s || ' days')::interval""",
-        (aoi_id, metric_name, scene_id, on_date, days),
-    ).fetchone()
+    if scene_id is None:  # daily source: history is the earlier days
+        row = conn.execute(
+            """SELECT avg(value), count(*) FROM daily_metrics
+               WHERE aoi_id = %s AND metric_name = %s AND date < %s
+                 AND date >= %s::date - (%s || ' days')::interval""",
+            (aoi_id, metric_name, on_date, on_date, days),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """SELECT avg(value), count(*) FROM metrics
+               WHERE aoi_id = %s AND metric_name = %s AND scene_id != %s
+                 AND valid_pixel_pct >= 0.5
+                 AND date >= %s::date - (%s || ' days')::interval""",
+            (aoi_id, metric_name, scene_id, on_date, days),
+        ).fetchone()
     mean, n = (row[0], row[1]) if row else (None, 0)
     if mean is None or mean == 0 or n < 3:
         return False, ""  # not enough history for a meaningful baseline
@@ -60,7 +69,7 @@ def evaluate_metric(
     conn: psycopg.Connection,
     *,
     aoi_id: object,
-    scene_id: int,
+    scene_id: int | None,
     sensor_id: str,
     metric_name: str,
     value: float,
@@ -91,13 +100,14 @@ def evaluate_metric(
         title = f"{metric_name} {detail} — {aoi_name}"
         cur = conn.execute(
             """INSERT INTO notifications
-                   (alert_rule_id, user_id, scene_id, channel, title, body, payload)
-               VALUES (%s, %s, %s, 'in_app', %s, %s, %s)
-               ON CONFLICT (alert_rule_id, scene_id) DO NOTHING""",
+                   (alert_rule_id, user_id, scene_id, metric_date, channel, title, body, payload)
+               VALUES (%s, %s, %s, %s, 'in_app', %s, %s, %s)
+               ON CONFLICT DO NOTHING""",
             (
                 rule_id,
                 user_id,
                 scene_id,
+                date,
                 title,
                 f"{metric_name} = {value:.4f} on {date} "
                 f"({valid_pixel_pct * 100:.0f}% valid pixels)",

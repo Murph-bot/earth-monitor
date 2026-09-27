@@ -252,8 +252,16 @@ def aoi_metrics(
         tuple(params),
     ).fetchall()
 
+    daily = db.execute(
+        f"""SELECT m.metric_name, m.source, m.unit, m.date, NULL, NULL, m.value, 1.0
+            FROM daily_metrics m
+            WHERE {" AND ".join(clauses).replace("m.sensor_id", "m.source")}
+            ORDER BY m.metric_name, m.source, m.date""",
+        tuple(params),
+    ).fetchall()
+
     series: dict[tuple[str, str, str], list[MetricPoint]] = {}
-    for name, sid, unit, d, acq, sid_, val, pct in rows:
+    for name, sid, unit, d, acq, sid_, val, pct in [*rows, *daily]:
         series.setdefault((name, sid, unit), []).append(
             MetricPoint(date=d, acquired_at=acq, scene_id=sid_, value=val, valid_pixel_pct=pct)
         )
