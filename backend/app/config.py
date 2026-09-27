@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +11,10 @@ class Settings(BaseSettings):
     Dev/prod differ only by env values — never by code branches.
     """
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="EM_", extra="ignore")
+    # hide_input_in_errors: a bad EM_DATABASE_URL must never print its password
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="EM_", extra="ignore", hide_input_in_errors=True
+    )
 
     environment: Literal["dev", "test", "prod"] = "dev"
     log_level: str = "INFO"
@@ -33,6 +37,17 @@ class Settings(BaseSettings):
     ingest_interval_hours: float | None = None  # set to override all sensor cadences
     ingest_tick_seconds: int = 60  # scheduler wake-up granularity
     ingest_analyze: bool = True  # False = catalog-only sweeps (no pixel reads)
+
+    @field_validator("database_url")
+    @classmethod
+    def _bare_postgres_url(cls, v: str) -> str:
+        v = v.strip()
+        if not v.startswith(("postgresql://", "postgres://")):
+            raise ValueError(
+                "EM_DATABASE_URL must be a bare postgresql://... connection string"
+                " (not a psql command, not wrapped in quotes, not empty)"
+            )
+        return v
 
 
 @lru_cache
