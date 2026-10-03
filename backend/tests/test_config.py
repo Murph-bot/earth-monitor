@@ -54,3 +54,32 @@ def test_cors_origins_accepts_dashboard_pastes(
 def test_cors_origins_comma_list(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EM_CORS_ORIGINS", f"{PAGES}, http://localhost:5173")
     assert Settings().cors_origins == [PAGES, "http://localhost:5173"]
+
+
+def test_dev_user_email_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    # a deploy that forgets to set EM_DEV_USER_EMAIL must not get a tokenless
+    # fallback user for free — it must be opted into explicitly
+    monkeypatch.delenv("EM_DEV_USER_EMAIL", raising=False)
+    assert Settings().dev_user_email is None
+
+
+def test_prod_refuses_default_jwt_secret() -> None:
+    from app.config import InsecureConfigError, ensure_safe_to_start
+
+    with pytest.raises(InsecureConfigError):
+        ensure_safe_to_start(Settings(environment="prod", database_url="postgresql://x/x"))
+
+
+@pytest.mark.parametrize("env", ["dev", "test"])
+def test_dev_and_test_allow_default_jwt_secret(env: str) -> None:
+    from app.config import ensure_safe_to_start
+
+    ensure_safe_to_start(Settings(environment=env))  # must not raise
+
+
+def test_prod_with_real_secret_is_fine() -> None:
+    from app.config import ensure_safe_to_start
+
+    ensure_safe_to_start(
+        Settings(environment="prod", database_url="postgresql://x/x", jwt_secret="a-real-secret")
+    )

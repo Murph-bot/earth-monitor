@@ -23,6 +23,7 @@ services:
     environment:
       EM_DATABASE_URL: postgresql://postgres:postgres@db:5432/earth_monitor
       EM_ENVIRONMENT: dev
+      EM_DEV_USER_EMAIL: dev@earth-monitor.local
     ports:
       - "8000:8000"
     depends_on:

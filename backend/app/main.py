@@ -9,7 +9,7 @@ from psycopg_pool import ConnectionPool
 from app.api.errors import install_handlers
 from app.api.ratelimit import Limiter
 from app.api.v1.router import router as v1_router
-from app.config import get_settings
+from app.config import ensure_safe_to_start, get_settings
 from app.logging import configure_logging
 
 logger = structlog.get_logger()
@@ -33,8 +33,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     pool.open()
     app.state.pool = pool
-    if settings.environment == "prod" and settings.jwt_secret.startswith("dev-secret"):
-        logger.warning("jwt_secret_is_default")  # set EM_JWT_SECRET
     logger.info("app_started", environment=settings.environment)
     yield
     pool.close()
@@ -42,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    ensure_safe_to_start(settings)
     configure_logging(settings.log_level, settings.environment)
 
     app = FastAPI(

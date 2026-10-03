@@ -28,6 +28,9 @@ def db() -> Iterator[psycopg.Connection]:
         pytest.skip("docker compose up -d db first")
 
     os.environ["EM_DATABASE_URL"] = TEST_URL
+    # dev_user_email has no default (see config.py) — tests that exercise the
+    # tokenless dev fallback need it set explicitly, same as local dev would.
+    os.environ.setdefault("EM_DEV_USER_EMAIL", "dev@earth-monitor.local")
     get_settings.cache_clear()
 
     with psycopg.connect(ADMIN_URL, autocommit=True) as admin:

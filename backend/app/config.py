@@ -27,8 +27,12 @@ class Settings(BaseSettings):
     ]
 
     # api
-    dev_user_email: str | None = "dev@earth-monitor.local"  # used only when no
-    # Authorization header is present; set empty in prod to disable
+    # tokenless fallback used only when no Authorization header is present
+    # (deps.get_current_user also refuses it outside dev regardless); no
+    # default — a deploy that forgets to set EM_ENVIRONMENT must not get a
+    # free pass into every endpoint. Set explicitly for local dev (see
+    # .env.example).
+    dev_user_email: str | None = None
     jwt_secret: str = "dev-secret-change-me-0123456789abcdef"  # HS256; env in prod
     jwt_ttl_hours: int = 336  # 14 days
     max_aoi_area_km2: float = 500.0  # windowed reads scale with AOI area
@@ -62,6 +66,23 @@ class Settings(BaseSettings):
                 " (not a psql command, not wrapped in quotes, not empty)"
             )
         return v
+
+
+_DEFAULT_JWT_SECRET = "dev-secret-change-me-0123456789abcdef"
+
+
+class InsecureConfigError(RuntimeError):
+    """Raised when the app would start with an unsafe default outside dev/test."""
+
+
+def ensure_safe_to_start(settings: Settings) -> None:
+    """Refuse to start outside dev/test with the default JWT secret — a
+    deploy that forgets EM_JWT_SECRET must fail loudly, not serve every
+    token as forgeable."""
+    if settings.environment not in ("dev", "test") and settings.jwt_secret == _DEFAULT_JWT_SECRET:
+        raise InsecureConfigError(
+            "EM_JWT_SECRET is still the default — set a real secret outside dev/test"
+        )
 
 
 @lru_cache
