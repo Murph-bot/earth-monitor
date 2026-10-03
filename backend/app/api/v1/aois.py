@@ -229,19 +229,27 @@ def aoi_metrics(
     date_to: dt_date | None = None,
 ) -> MetricsResponse:
     _get_aoi(db, aoi_id, user_id)
+    # metrics.sensor_id and daily_metrics.source are the same filter on two
+    # differently-named columns — build each clause list against its own
+    # column name rather than string-patching one into the other.
     clauses: list[str] = ["m.aoi_id = %s"]
+    daily_clauses: list[str] = ["m.aoi_id = %s"]
     params: list[object] = [aoi_id]
     if metric:
         clauses.append("m.metric_name = %s")
+        daily_clauses.append("m.metric_name = %s")
         params.append(metric)
     if sensor:
         clauses.append("m.sensor_id = %s")
+        daily_clauses.append("m.source = %s")
         params.append(sensor)
     if date_from:
         clauses.append("m.date >= %s")
+        daily_clauses.append("m.date >= %s")
         params.append(date_from)
     if date_to:
         clauses.append("m.date <= %s")
+        daily_clauses.append("m.date <= %s")
         params.append(date_to)
     rows = db.execute(
         f"""SELECT m.metric_name, m.sensor_id, m.unit, m.date, s.acquired_at,
@@ -255,7 +263,7 @@ def aoi_metrics(
     daily = db.execute(
         f"""SELECT m.metric_name, m.source, m.unit, m.date, NULL, NULL, m.value, 1.0
             FROM daily_metrics m
-            WHERE {" AND ".join(clauses).replace("m.sensor_id", "m.source")}
+            WHERE {" AND ".join(daily_clauses)}
             ORDER BY m.metric_name, m.source, m.date""",
         tuple(params),
     ).fetchall()

@@ -127,6 +127,12 @@ def test_metrics_include_daily_rain(
     filtered = client.get(f"/v1/aois/{aoi_id}/metrics?metric=rain_mm&date_from=2026-09-26")
     assert [p["value"] for p in filtered.json()["series"][0]["points"]] == [0.0]
 
+    # ?sensor= filters daily_metrics on its own `source` column, not
+    # `sensor_id` — both tables are queried, each against its real column
+    by_sensor = client.get(f"/v1/aois/{aoi_id}/metrics?sensor=pdir-now").json()
+    assert [s["metric_name"] for s in by_sensor["series"]] == ["rain_mm"]
+    assert client.get(f"/v1/aois/{aoi_id}/metrics?sensor=sentinel-2").json()["series"] == []
+
 
 def test_sensors(client: TestClient) -> None:
     sensors = client.get("/v1/sensors").json()
