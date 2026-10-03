@@ -15,9 +15,9 @@ import pytest
 from affine import Affine
 from rasterio.warp import transform_bounds
 
-from app.adapters.base import BandWindow, GeoJSONGeom, SceneMeta, SceneWindow
+from app.adapters.base import AdapterError, BandWindow, GeoJSONGeom, SceneMeta, SceneWindow
 from app.adapters.sentinel2 import Sentinel2Adapter
-from app.analysis.runner import analyze_pending
+from app.analysis.runner import MAX_READ_ATTEMPTS, analyze_pending
 from app.ingest.pipeline import ingest_sensor
 
 AOI: GeoJSONGeom = {
@@ -161,3 +161,40 @@ def test_partial_mask_valid_pct(db: psycopg.Connection, aoi_id: str) -> None:
         (aoi_id,),
     ).fetchone()[0]
     assert pct == pytest.approx(0.5)
+
+
+def test_unreadable_scene_stops_retrying_after_max_attempts(
+    db: psycopg.Connection, aoi_id: str
+) -> None:
+    """A permanently broken COG must not be re-read forever: after
+    MAX_READ_ATTEMPTS failures the pair is marked a gap and read() stops
+    being called for it."""
+    adapter = FakeReadAdapter([_meta("S1")])
+
+    def boom(scene, aoi, bands):  # type: ignore[no-untyped-def]
+        raise AdapterError("cannot open COG")
+
+    adapter.read = boom  # type: ignore[method-assign]
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+
+    for _ in range(MAX_READ_ATTEMPTS):
+        assert analyze_pending(db, adapter) == 0
+
+    scene_id = db.execute("SELECT id FROM scenes WHERE scene_key = 'S1'").fetchone()[0]
+    gaps = db.execute(
+        "SELECT reason FROM metric_gaps WHERE scene_id = %s AND aoi_id = %s",
+        (scene_id, aoi_id),
+    ).fetchall()
+    assert gaps and all(r[0] == "read_error" for r in gaps)
+
+    # no longer pending — a further sweep must not call read() again
+    reads: list[str] = []
+    orig_read = adapter.read
+
+    def counting_read(scene, aoi, bands):  # type: ignore[no-untyped-def]
+        reads.append(scene.scene_id)
+        return orig_read(scene, aoi, bands)
+
+    adapter.read = counting_read  # type: ignore[method-assign]
+    assert analyze_pending(db, adapter) == 0
+    assert reads == []

@@ -189,6 +189,25 @@ def _analyze_pair(
     return written
 
 
+MAX_READ_ATTEMPTS = 5  # give up on a scene that fails to read this many times
+
+
+def _record_read_failure(conn: psycopg.Connection, pair: PendingPair, error: Exception) -> int:
+    """Count this failed read against (scene, aoi); returns attempts so far."""
+    row = conn.execute(
+        """INSERT INTO scene_read_failures (scene_id, aoi_id, attempts, last_error, last_attempt_at)
+           VALUES (%s, %s, 1, %s, now())
+           ON CONFLICT (scene_id, aoi_id) DO UPDATE SET
+               attempts = scene_read_failures.attempts + 1,
+               last_error = EXCLUDED.last_error,
+               last_attempt_at = now()
+           RETURNING attempts""",
+        (pair.scene_id, pair.aoi_id, str(error)[:2000]),
+    ).fetchone()
+    assert row is not None  # RETURNING always yields a row
+    return int(row[0])
+
+
 def analyze_pending(conn: psycopg.Connection, adapter: SensorAdapter) -> int:
     """Write metrics for every (scene, aoi) pair missing them. Returns the
     number of metric rows written."""
@@ -204,7 +223,21 @@ def analyze_pending(conn: psycopg.Connection, adapter: SensorAdapter) -> int:
             written += _analyze_pair(conn, adapter, pair, missing)
         except AdapterError as exc:
             # one unreadable scene doesn't kill the sweep — it stays pending
-            # and the next run retries it
-            log.warning("analyze_pair_failed", scene_id=pair.scene_id, error=str(exc))
+            # and retries, but only up to MAX_READ_ATTEMPTS; past that it's
+            # recorded as a permanent gap so it stops costing a read every
+            # sweep (a broken COG doesn't fix itself)
+            attempts = _record_read_failure(conn, pair, exc)
+            if attempts >= MAX_READ_ATTEMPTS:
+                _record_gaps(conn, pair, list(pair.missing), "read_error")
+                log.warning(
+                    "analyze_pair_gave_up",
+                    scene_id=pair.scene_id,
+                    attempts=attempts,
+                    error=str(exc),
+                )
+            else:
+                log.warning(
+                    "analyze_pair_failed", scene_id=pair.scene_id, attempts=attempts, error=str(exc)
+                )
     log.info("analyze_done", sensor_id=adapter.sensor_id, metrics_written=written)
     return written
