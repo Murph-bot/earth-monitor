@@ -65,7 +65,8 @@ def register(body: RegisterIn, db: DbConn) -> TokenOut:
 @router.post("/auth/login", dependencies=[AUTH_LIMIT])
 def login(body: LoginIn, db: DbConn) -> TokenOut:
     row = db.execute(
-        "SELECT id, email, display_name, password_hash FROM users WHERE email = %s",
+        "SELECT id, email, display_name, password_hash FROM users "
+        "WHERE email = %s AND deleted_at IS NULL",
         (body.email.lower(),),
     ).fetchone()
     ok = verify_password(body.password, row[3] if row and row[3] else _dummy_hash())

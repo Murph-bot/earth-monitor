@@ -69,6 +69,19 @@ def test_login_failures(client: TestClient) -> None:
         assert r.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
+def test_soft_deleted_user_cannot_login(client: TestClient) -> None:
+    _register(client)
+
+    from app.api.deps import get_db
+
+    db = next(client.app.dependency_overrides[get_db]())
+    db.execute("UPDATE users SET deleted_at = now() WHERE email = %s", (USER["email"],))
+
+    r = client.post("/v1/auth/login", json={"email": USER["email"], "password": USER["password"]})
+    assert r.status_code == 401
+    assert r.json()["error"]["code"] == "UNAUTHENTICATED"
+
+
 def test_bad_token_rejected(client: TestClient) -> None:
     r = client.get("/v1/aois", headers={"Authorization": "Bearer garbage.token.here"})
     assert r.status_code == 401
