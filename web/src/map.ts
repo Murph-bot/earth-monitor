@@ -1,5 +1,10 @@
-import maplibregl from "maplibre-gl"
+import * as maplibregl from "maplibre-gl"
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"
 import { getToken } from "./auth"
+
+// v6 is ESM-only; under a bundler the worker URL must be set once, before any
+// Map exists. ?worker&url (not ?url) emits a self-contained worker chunk.
+maplibregl.setWorkerUrl(workerUrl)
 
 // MapLibre, no token: OSM raster basemap for orientation — scene imagery is
 // the product layer rendered by our own /v1/tiles endpoints.
