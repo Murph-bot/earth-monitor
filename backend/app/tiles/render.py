@@ -33,8 +33,9 @@ def render_png(
     """Public entry point: quantizes `display_max` before the cache lookup so
     a free-form ?stretch= query param (clients can pass any float) doesn't
     bust the cache for every slightly different value — callers a hundredth
-    apart render the same tile anyway."""
-    quantized = round(display_max / STRETCH_STEP) * STRETCH_STEP
+    apart render the same tile anyway. Very small values clamp to STRETCH_STEP
+    to avoid division by zero in the render."""
+    quantized = max(round(display_max / STRETCH_STEP) * STRETCH_STEP, STRETCH_STEP)
     return _render_png_cached(hrefs, scale_offsets, quantized, x, y, z)
 
 
