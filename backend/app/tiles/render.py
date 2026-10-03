@@ -13,6 +13,7 @@ from rio_tiler.models import ImageData
 
 TILE_SIZE = 256
 CACHE_TILES = 512  # ~few MB of PNGs; an LRU bound, not a quota
+STRETCH_STEP = 0.05  # quantize the ?stretch= query param for the cache key
 
 
 def _band_window(href: str, x: int, y: int, z: int) -> ImageData:
@@ -21,8 +22,24 @@ def _band_window(href: str, x: int, y: int, z: int) -> ImageData:
         return img
 
 
-@lru_cache(maxsize=CACHE_TILES)
 def render_png(
+    hrefs: tuple[str, ...],
+    scale_offsets: tuple[tuple[float, float], ...],
+    display_max: float,
+    x: int,
+    y: int,
+    z: int,
+) -> bytes:
+    """Public entry point: quantizes `display_max` before the cache lookup so
+    a free-form ?stretch= query param (clients can pass any float) doesn't
+    bust the cache for every slightly different value — callers a hundredth
+    apart render the same tile anyway."""
+    quantized = round(display_max / STRETCH_STEP) * STRETCH_STEP
+    return _render_png_cached(hrefs, scale_offsets, quantized, x, y, z)
+
+
+@lru_cache(maxsize=CACHE_TILES)
+def _render_png_cached(
     hrefs: tuple[str, ...],
     scale_offsets: tuple[tuple[float, float], ...],
     display_max: float,
