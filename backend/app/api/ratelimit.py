@@ -31,9 +31,26 @@ class Limiter:
             return self._counts[scope, client] <= per_minute
 
 
+def _client_key(request: Request) -> str:
+    """The real client address this request came from.
+
+    Behind Render's proxy, uvicorn (FORWARDED_ALLOW_IPS) rewrites
+    request.client to the *leftmost* X-Forwarded-For hop, which the caller
+    controls — keying on it lets a caller rotate the leftmost hop to dodge
+    the limiter. Render's own proxy appends the real client IP as the last
+    hop, so read the raw header directly and take the rightmost entry. No
+    header at all (local dev, no proxy in front) falls back to the socket
+    address.
+    """
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.rsplit(",", 1)[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def rate_limit(scope: str, per_minute: int) -> Any:
     def check(request: Request) -> None:
-        client = request.client.host if request.client else "unknown"
+        client = _client_key(request)
         limiter: Limiter = request.app.state.limiter
         if not limiter.allow(scope, client, per_minute):
             raise HTTPException(
