@@ -112,7 +112,8 @@ def _aois_with_watermarks(
         """SELECT a.id, ST_AsGeoJSON(a.geom), s.last_checked_at
            FROM aois a
            LEFT JOIN aoi_sensor_state s
-                  ON s.aoi_id = a.id AND s.sensor_id = %s""",
+                  ON s.aoi_id = a.id AND s.sensor_id = %s
+           ORDER BY a.id""",
         (sensor_id,),
     ).fetchall()
     return [(str(r[0]), json.loads(r[1]), r[2]) for r in rows]
@@ -127,8 +128,12 @@ def ingest_sensor(
     analyze: bool = True,
 ) -> RunStats:
     """Run one catalog sweep for `adapter`'s sensor. Writes an ingestion_runs
-    audit row; on adapter/DB failure the row is marked failed and the error
-    re-raised (the scheduler isolates per-sensor failures)."""
+    audit row. Each AOI's search+write is isolated: one bad geometry or a
+    flaky catalog response for one AOI is logged and skipped, not fatal to
+    the rest — the run is recorded 'partial' rather than aborting before
+    analyze_pending (and every other AOI) ever runs. Only a failure outside
+    the per-AOI loop (e.g. analyze_pending blowing up) marks the run failed
+    and re-raises, matching the scheduler's per-sensor isolation."""
     sensor_id = adapter.sensor_id
     with conn.transaction():
         row = conn.execute(
@@ -137,28 +142,38 @@ def ingest_sensor(
         assert row is not None  # RETURNING always yields a row
         run_id = int(row[0])
 
-    aois_checked = found = inserted = metrics_written = 0
+    aois_checked = found = inserted = metrics_written = aois_failed = 0
     scene_ids: list[int] = []
+    errors: list[str] = []
     try:
         now = datetime.now(UTC)
         for aoi_id, geom, last_checked in _aois_with_watermarks(conn, sensor_id):
-            start: date = (
-                (last_checked - timedelta(hours=overlap_hours)).date()
-                if last_checked
-                else (now - timedelta(days=backfill_days)).date()
-            )
-            metas = adapter.search(geom, start, now.date())
-            aois_checked += 1
-            found += len(metas)
-            with conn.transaction():
-                for meta in metas:
-                    scene_id, is_new = _upsert_scene(conn, meta)
-                    inserted += int(is_new)
-                    scene_ids.append(scene_id)
-                    _refresh_coverage(conn, scene_id)
-                _update_watermark(
-                    conn, aoi_id, sensor_id, max((m.acquired_at for m in metas), default=None)
+            try:
+                start: date = (
+                    (last_checked - timedelta(hours=overlap_hours)).date()
+                    if last_checked
+                    else (now - timedelta(days=backfill_days)).date()
                 )
+                metas = adapter.search(geom, start, now.date())
+                found += len(metas)
+                with conn.transaction():
+                    for meta in metas:
+                        scene_id, is_new = _upsert_scene(conn, meta)
+                        inserted += int(is_new)
+                        scene_ids.append(scene_id)
+                        _refresh_coverage(conn, scene_id)
+                    _update_watermark(
+                        conn,
+                        aoi_id,
+                        sensor_id,
+                        max((m.acquired_at for m in metas), default=None),
+                    )
+            except Exception as exc:
+                aois_failed += 1
+                errors.append(f"aoi {aoi_id}: {exc}")
+                log.warning("ingest_aoi_failed", sensor_id=sensor_id, aoi_id=aoi_id, error=str(exc))
+            else:
+                aois_checked += 1
         if analyze:
             # pixel reads happen here — outside the metadata transactions
             metrics_written = analyze_pending(conn, adapter)
@@ -167,25 +182,36 @@ def ingest_sensor(
             conn.execute(
                 """UPDATE ingestion_runs SET finished_at = now(), status = 'failed',
                        error = %s, scenes_found = %s, scenes_inserted = %s,
-                       metrics_written = %s
+                       metrics_written = %s, aois_failed = %s
                    WHERE id = %s""",
-                (str(exc)[:2000], found, inserted, metrics_written, run_id),
+                (str(exc)[:2000], found, inserted, metrics_written, aois_failed, run_id),
             )
         log.error("ingest_failed", sensor_id=sensor_id, run_id=run_id, error=str(exc))
         raise
 
+    status = "partial" if aois_failed else "success"
     with conn.transaction():
         conn.execute(
-            """UPDATE ingestion_runs SET finished_at = now(), status = 'success',
-                   scenes_found = %s, scenes_inserted = %s, metrics_written = %s
+            """UPDATE ingestion_runs SET finished_at = now(), status = %s,
+                   scenes_found = %s, scenes_inserted = %s, metrics_written = %s,
+                   aois_failed = %s, error = %s
                WHERE id = %s""",
-            (found, inserted, metrics_written, run_id),
+            (
+                status,
+                found,
+                inserted,
+                metrics_written,
+                aois_failed,
+                "; ".join(errors)[:2000] or None,
+                run_id,
+            ),
         )
     log.info(
-        "ingest_ok",
+        "ingest_ok" if not aois_failed else "ingest_partial",
         sensor_id=sensor_id,
         run_id=run_id,
         aois=aois_checked,
+        aois_failed=aois_failed,
         found=found,
         inserted=inserted,
         metrics=metrics_written,
