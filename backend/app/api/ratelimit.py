@@ -1,9 +1,9 @@
 """Per-client request caps: fixed one-minute windows in process memory.
 
 The free tier runs one API instance, so a shared store buys nothing yet.
-Keyed on request.client.host; behind a proxy, uvicorn must be told to trust
-X-Forwarded-For (FORWARDED_ALLOW_IPS, set in render.yaml) or every caller
-shares the proxy's bucket.
+Keyed on the real client IP as Cloudflare reports it (see _client_key) —
+never on request.client.host alone or on X-Forwarded-For, both of which
+are an edge/proxy address, not the caller, on this deployment's path.
 """
 
 import threading
@@ -34,17 +34,22 @@ class Limiter:
 def _client_key(request: Request) -> str:
     """The real client address this request came from.
 
-    Behind Render's proxy, uvicorn (FORWARDED_ALLOW_IPS) rewrites
-    request.client to the *leftmost* X-Forwarded-For hop, which the caller
-    controls — keying on it lets a caller rotate the leftmost hop to dodge
-    the limiter. Render's own proxy appends the real client IP as the last
-    hop, so read the raw header directly and take the rightmost entry. No
-    header at all (local dev, no proxy in front) falls back to the socket
-    address.
+    This deployment sits behind Cloudflare in front of Render. On that path,
+    X-Forwarded-For's rightmost hop is Cloudflare's own edge IP, not the
+    caller — keying on it (or on request.client.host, which Render's proxy
+    sets to the same edge address) would put every caller in one shared
+    bucket, making the limiter useless. Cloudflare sets CF-Connecting-IP to
+    the real client IP on every request it proxies; True-Client-IP is the
+    equivalent for Enterprise plans with the field enabled. Prefer those,
+    never X-Forwarded-For, and fall back to the socket address only when
+    neither is present (local dev, no proxy in front).
     """
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.rsplit(",", 1)[-1].strip()
+    cf_connecting_ip = request.headers.get("cf-connecting-ip")
+    if cf_connecting_ip:
+        return cf_connecting_ip.strip()
+    true_client_ip = request.headers.get("true-client-ip")
+    if true_client_ip:
+        return true_client_ip.strip()
     return request.client.host if request.client else "unknown"
 
 
