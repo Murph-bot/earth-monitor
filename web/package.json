@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@earth-monitor/shared": "*",
-    "maplibre-gl": "^5.13.0",
+    "maplibre-gl": "^6.13.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

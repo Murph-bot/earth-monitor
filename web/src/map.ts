@@ -1,5 +1,9 @@
-import maplibregl from "maplibre-gl"
+import * as maplibregl from "maplibre-gl"
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url"
 import { getToken } from "./auth"
+
+// MapLibre 6 resolves its worker at runtime, which bundlers miss; ship it as an asset.
+maplibregl.setWorkerUrl(workerUrl)
 
 // MapLibre, no token: OSM raster basemap for orientation — scene imagery is
 // the product layer rendered by our own /v1/tiles endpoints.

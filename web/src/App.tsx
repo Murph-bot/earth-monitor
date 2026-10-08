@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type maplibregl from "maplibre-gl"
+import type * as maplibregl from "maplibre-gl"
 import { API_BASE, client, type Aoi, type MetricsResponse, type SceneSummary } from "./api"
 import { AuthScreen, clearToken } from "./auth"
 import { EMPTY_FC, initMap, rectFeature, setGeoData } from "./map"
