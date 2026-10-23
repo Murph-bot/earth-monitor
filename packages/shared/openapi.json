@@ -1047,18 +1047,62 @@
         }
       }
     },
-    "/v1/public/region/thessaly/summary": {
+    "/v1/public/regions": {
       "get": {
-        "summary": "Thessaly Summary",
-        "description": "This week's Thessaly numbers for the landing page: mean greenness (NDVI)\nvs the week before, mean 7-day rain, and clear vs cloudy scenes. Aggregated\nover monitored areas inside the region; null where there is no data.",
-        "operationId": "thessaly_summary_v1_public_region_thessaly_summary_get",
+        "summary": "List Regions",
+        "description": "Registered public regions (slug, name, bounds) \u2014 static registry data.",
+        "operationId": "list_regions_v1_public_regions_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThessalySummary"
+                  "items": {
+                    "$ref": "#/components/schemas/RegionOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Regions V1 Public Regions Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/region/{slug}/summary": {
+      "get": {
+        "summary": "Region Summary",
+        "description": "This week's numbers for a public region: mean greenness (NDVI) vs the\nweek before, mean 7-day rain, and clear vs cloudy scenes. Aggregated over\nmonitored areas inside the region; null where there is no data.",
+        "operationId": "region_summary_v1_public_region__slug__summary_get",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1970,6 +2014,86 @@
         ],
         "title": "RainSummary"
       },
+      "RegionOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "bounds": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bounds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "bounds"
+        ],
+        "title": "RegionOut"
+      },
+      "RegionSummary": {
+        "properties": {
+          "region": {
+            "type": "string",
+            "title": "Region"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "bounds": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bounds"
+          },
+          "window_days": {
+            "type": "integer",
+            "title": "Window Days"
+          },
+          "clear_max_cloud_pct": {
+            "type": "number",
+            "title": "Clear Max Cloud Pct"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "greenness": {
+            "$ref": "#/components/schemas/GreennessSummary"
+          },
+          "rain": {
+            "$ref": "#/components/schemas/RainSummary"
+          },
+          "scenes": {
+            "$ref": "#/components/schemas/SceneCountSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "region",
+          "name",
+          "bounds",
+          "window_days",
+          "clear_max_cloud_pct",
+          "generated_at",
+          "greenness",
+          "rain",
+          "scenes"
+        ],
+        "title": "RegionSummary"
+      },
       "RegisterIn": {
         "properties": {
           "email": {
@@ -2350,56 +2474,6 @@
           "last_scene_at"
         ],
         "title": "SensorStateOut"
-      },
-      "ThessalySummary": {
-        "properties": {
-          "region": {
-            "type": "string",
-            "const": "thessaly",
-            "title": "Region"
-          },
-          "bounds": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array",
-            "title": "Bounds"
-          },
-          "window_days": {
-            "type": "integer",
-            "title": "Window Days"
-          },
-          "clear_max_cloud_pct": {
-            "type": "number",
-            "title": "Clear Max Cloud Pct"
-          },
-          "generated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Generated At"
-          },
-          "greenness": {
-            "$ref": "#/components/schemas/GreennessSummary"
-          },
-          "rain": {
-            "$ref": "#/components/schemas/RainSummary"
-          },
-          "scenes": {
-            "$ref": "#/components/schemas/SceneCountSummary"
-          }
-        },
-        "type": "object",
-        "required": [
-          "region",
-          "bounds",
-          "window_days",
-          "clear_max_cloud_pct",
-          "generated_at",
-          "greenness",
-          "rain",
-          "scenes"
-        ],
-        "title": "ThessalySummary"
       },
       "TokenOut": {
         "properties": {

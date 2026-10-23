@@ -18,6 +18,7 @@ from app.api.deps import DbConn
 from app.api.v1.schemas import (
     GreennessSummary,
     RainSummary,
+    RegionOut,
     RegionSummary,
     SceneCountSummary,
 )
@@ -108,9 +109,10 @@ def compute_summary(
 
 
 @router.get("/public/regions")
-def list_regions() -> list[dict[str, object]]:
-    """Registered public regions (slug, name, bounds)."""
-    return [{"slug": r.slug, "name": r.name, "bounds": list(r.bbox)} for r in REGIONS.values()]
+def list_regions(response: Response) -> list[RegionOut]:
+    """Registered public regions (slug, name, bounds) — static registry data."""
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return [RegionOut(slug=r.slug, name=r.name, bounds=list(r.bbox)) for r in REGIONS.values()]
 
 
 @router.get("/public/region/{slug}/summary")

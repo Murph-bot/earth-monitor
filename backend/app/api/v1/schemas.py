@@ -265,6 +265,12 @@ class SceneCountSummary(BaseModel):
     latest_scene_at: datetime | None
 
 
+class RegionOut(BaseModel):
+    slug: str
+    name: str
+    bounds: list[float]  # minx, miny, maxx, maxy (EPSG:4326)
+
+
 class RegionSummary(BaseModel):
     region: str  # slug from app.regions.REGIONS
     name: str

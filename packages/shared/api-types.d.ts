@@ -302,7 +302,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/public/region/thessaly/summary": {
+    "/v1/public/regions": {
         parameters: {
             query?: never;
             header?: never;
@@ -310,12 +310,32 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Thessaly Summary
-         * @description This week's Thessaly numbers for the landing page: mean greenness (NDVI)
-         *     vs the week before, mean 7-day rain, and clear vs cloudy scenes. Aggregated
-         *     over monitored areas inside the region; null where there is no data.
+         * List Regions
+         * @description Registered public regions (slug, name, bounds) — static registry data.
          */
-        get: operations["thessaly_summary_v1_public_region_thessaly_summary_get"];
+        get: operations["list_regions_v1_public_regions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/region/{slug}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Region Summary
+         * @description This week's numbers for a public region: mean greenness (NDVI) vs the
+         *     week before, mean 7-day rain, and clear vs cloudy scenes. Aggregated over
+         *     monitored areas inside the region; null where there is no data.
+         */
+        get: operations["region_summary_v1_public_region__slug__summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -682,6 +702,36 @@ export interface components {
             /** Areas */
             areas: number;
         };
+        /** RegionOut */
+        RegionOut: {
+            /** Slug */
+            slug: string;
+            /** Name */
+            name: string;
+            /** Bounds */
+            bounds: number[];
+        };
+        /** RegionSummary */
+        RegionSummary: {
+            /** Region */
+            region: string;
+            /** Name */
+            name: string;
+            /** Bounds */
+            bounds: number[];
+            /** Window Days */
+            window_days: number;
+            /** Clear Max Cloud Pct */
+            clear_max_cloud_pct: number;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            greenness: components["schemas"]["GreennessSummary"];
+            rain: components["schemas"]["RainSummary"];
+            scenes: components["schemas"]["SceneCountSummary"];
+        };
         /** RegisterIn */
         RegisterIn: {
             /**
@@ -806,28 +856,6 @@ export interface components {
             last_checked_at: string | null;
             /** Last Scene At */
             last_scene_at: string | null;
-        };
-        /** ThessalySummary */
-        ThessalySummary: {
-            /**
-             * Region
-             * @constant
-             */
-            region: "thessaly";
-            /** Bounds */
-            bounds: number[];
-            /** Window Days */
-            window_days: number;
-            /** Clear Max Cloud Pct */
-            clear_max_cloud_pct: number;
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            greenness: components["schemas"]["GreennessSummary"];
-            rain: components["schemas"]["RainSummary"];
-            scenes: components["schemas"]["SceneCountSummary"];
         };
         /** TokenOut */
         TokenOut: {
@@ -1565,7 +1593,7 @@ export interface operations {
             };
         };
     };
-    thessaly_summary_v1_public_region_thessaly_summary_get: {
+    list_regions_v1_public_regions_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1580,7 +1608,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThessalySummary"];
+                    "application/json": components["schemas"]["RegionOut"][];
+                };
+            };
+        };
+    };
+    region_summary_v1_public_region__slug__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
