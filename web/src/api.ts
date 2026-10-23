@@ -7,7 +7,11 @@ export type { components }
 // Pages + Render) sets VITE_API_URL at build time.
 // Trailing slash stripped once: tile URLs are rewritten with API_BASE, and
 // "//v1/..." matches no route.
-export const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "")
+// Fallback so a Pages/preview build without the env var still reaches the API.
+const DEFAULT_PROD_API = "https://earth-monitor-api.onrender.com"
+export const API_BASE = (
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? DEFAULT_PROD_API : "")
+).replace(/\/+$/, "")
 export const client = api(API_BASE)
 
 export type Aoi = components["schemas"]["AoiOut"]

@@ -6,3 +6,4 @@
 /areas/* /index.html 200
 /signin /index.html 200
 /signup /index.html 200
+/explore/* /index.html 200
