@@ -287,7 +287,7 @@ export const App = () => {
         id: "region-line-casing",
         type: "line",
         source: "regions",
-        paint: { "line-color": "#09090b", "line-width": 5 },
+        paint: { "line-color": "#09090b", "line-width": 7 },
       })
       map.addLayer({
         id: "region-line",
