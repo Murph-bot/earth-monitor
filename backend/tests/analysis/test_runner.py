@@ -161,3 +161,21 @@ def test_partial_mask_valid_pct(db: psycopg.Connection, aoi_id: str) -> None:
         (aoi_id,),
     ).fetchone()[0]
     assert pct == pytest.approx(0.5)
+
+
+def test_clouded_scene_logs_gap_not_silent_zero(db: psycopg.Connection, aoi_id: str) -> None:
+    """Regression: a run that inserts only fully-clouded scenes reports
+    metrics_written=0 — the analyze_done summary must say why."""
+    from structlog.testing import capture_logs
+
+    adapter = FakeReadAdapter([_meta("CLOUDY")], scl_class=9)
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    with capture_logs() as logs:
+        assert analyze_pending(db, adapter) == 0
+    done = next(e for e in logs if e["event"] == "analyze_done")
+    assert done["pairs_pending"] == 1
+    assert done["metrics_written"] == 0
+    assert done["gaps_recorded"] == 2
+    assert done["pairs_failed"] == 0
+    gap = next(e for e in logs if e["event"] == "metric_gap")
+    assert gap["reason"] == "no_valid_pixels" and gap["scene_key"] == "CLOUDY"
