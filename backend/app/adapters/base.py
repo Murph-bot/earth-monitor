@@ -96,6 +96,13 @@ class SensorAdapter(ABC):
     # band the quality_mask needs in the window (None = no quality band;
     # mask then means "inside the AOI polygon" only)
     mask_band: str | None = None
+    # How late the catalog may publish an item after its acquisition time.
+    # The sweep re-searches at least this far back from the last check, or
+    # late items fall behind the window and are never ingested.
+    publish_lag_hours: int = 0
+    # A sweep fails the run when this sensor's newest stored scene is older
+    # than this many days (0 = never), so a silent stall shows up red in CI.
+    stale_after_days: int = 0
 
     def readable_href(self, href: str) -> str:
         """The URL to open for an asset href. Catalogs that gate their blobs

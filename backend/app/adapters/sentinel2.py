@@ -59,6 +59,12 @@ class Sentinel2Adapter(SensorAdapter):
     catalog = "earth-search"
     collections = (COLLECTION,)
     mask_band = "scl"
+    stale_after_days = 12
+    # Earth Search publishes c1-l2a items ~3-7 h after acquisition (observed
+    # Oct 2026: created - datetime = 3.5-6.6 h over T34TFK/TFL) but Element84
+    # re-runs/backfills granules days later. The sweep window is date-granular
+    # and cheap (metadata only), so re-search 3 days back every run.
+    publish_lag_hours = 72
 
     def band_registry(self) -> list[BandSpec]:
         return list(BANDS)
