@@ -38,13 +38,24 @@ export const initMap = (container: HTMLElement) => {
     for (const l of map.getStyle().layers ?? [])
       if (l.type === "background") map.setPaintProperty(l.id, "background-color", BASEMAP_BG)
   })
+  // basemap style references sprite images it doesn't ship (circle-11,
+  // wood-pattern…): register a transparent 1x1 so MapLibre stops warning
+  map.on("styleimagemissing", (e) => {
+    if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) })
+  })
+  // phone: collapsed behind a 44px toggle; desktop: always expanded
+  const phone = typeof window !== "undefined" && window.innerWidth <= PHONE_MAX
   map.addControl(
     new maplibregl.AttributionControl({
-      compact: false, // always expanded (design review)
+      compact: phone,
       customAttribution: "Contains modified Copernicus Sentinel data",
     }),
     "top-right",
   )
+  if (phone)
+    container
+      .querySelector(".maplibregl-ctrl-attrib")
+      ?.classList.remove("maplibregl-compact-show")
   return map
 }
 

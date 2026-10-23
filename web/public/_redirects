@@ -1,9 +1,9 @@
-# Explicit SPA rewrites only. NO catch-all (/* /index.html 200): with a
+# Explicit SPA rewrites only. NO catch-all (/* / 200): with a
 # top-level 404.html and no catch-all, Cloudflare Pages answers unknown paths
 # with a real HTTP 404 (AC 9, 24). Add a line here for every new client route.
-/explore /index.html 200
-/areas /index.html 200
-/areas/* /index.html 200
-/signin /index.html 200
-/signup /index.html 200
-/explore/* /index.html 200
+/explore / 200
+/areas / 200
+/areas/* / 200
+/signin / 200
+/signup / 200
+/explore/* / 200

@@ -98,6 +98,17 @@
 .maplibregl-ctrl-attrib {
   font-size: 11px;
 }
+/* dark attribution bar, readable text + links (design re-check) */
+.maplibregl-ctrl.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background-color: #09090be6;
+  color: #d4d4d8;
+}
+.maplibregl-ctrl-attrib a,
+.maplibregl-ctrl-attrib a:hover {
+  color: #d4d4d8;
+  text-decoration: underline;
+}
 /* attribution lives top-right (map.ts) so the bottom sheet never covers it */
 .maplibregl-ctrl-top-right .maplibregl-ctrl-attrib {
   margin: 8px;
@@ -110,9 +121,20 @@
 
 /* MapLibre's compact attribution toggle is sized by its own CSS; the global
    44px rule would break its layout. It stays a small third-party control. */
+/* phone compact toggle: 44px touch target, light icon on the dark bar */
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  min-height: 44px;
+  padding-right: 44px;
+}
 .maplibregl-ctrl-attrib-button {
-  min-height: 0;
-  min-width: 0;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  top: 0;
+  right: 0;
+  background-color: transparent;
+  filter: invert(1);
 }
 
 /* Region labels on the Greece map (design brief §10): >=13px, white with a

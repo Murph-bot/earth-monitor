@@ -15,6 +15,9 @@ const tokens: Record<string, string> = {
   "%LANDING_TITLE%": LANDING_TITLE,
   "%REGIONS%": REGIONS_LABEL,
   "%SITE_URL%": SITE_URL,
+  // absolute og:/twitter:image — Pages builds expose CF_PAGES_URL (the
+  // deployment/branch-preview origin); elsewhere fall back to SITE_URL
+  "%ORIGIN%": (process.env.CF_PAGES_URL || SITE_URL).replace(/\/+$/, ""),
 };
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const fill = (html: string) =>
