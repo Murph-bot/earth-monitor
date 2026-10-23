@@ -4,10 +4,12 @@
 #                       update here if the API moves
 #   MapLibre basemap .. https://tile.openstreetmap.org raster tiles (web/src/map.ts);
 #                       no style/glyph/sprite host is used (inline style object)
+#   NASA GIBS ........ https://gibs.earthdata.nasa.gov overview raster tiles (img/fetch)
+#                       + WMTS DescribeDomains for the latest date (connect-src)
 #   Turnstile ......... https://challenges.cloudflare.com (script + iframe + siteverify widget calls)
 #   worker-src ........ blob: for MapLibre's worker fallback
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://earth-monitor-api.onrender.com; connect-src 'self' https://earth-monitor-api.onrender.com https://tile.openstreetmap.org https://challenges.cloudflare.com; font-src 'self'; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://gibs.earthdata.nasa.gov https://earth-monitor-api.onrender.com; connect-src 'self' https://earth-monitor-api.onrender.com https://tile.openstreetmap.org https://gibs.earthdata.nasa.gov https://challenges.cloudflare.com; font-src 'self'; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY

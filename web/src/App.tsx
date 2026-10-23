@@ -1,24 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type * as maplibregl from "maplibre-gl"
+import * as maplibregl from "maplibre-gl"
 import {
   API_BASE,
   client,
   type Aoi,
   type AoiDetail,
   type MetricsResponse,
+  type RegionOut,
   type SceneSummary,
 } from "./api"
+import { pageTitle } from "./brand"
 import { AuthForm, clearToken, getToken } from "./auth"
-import { EMPTY_FC, initMap, rectFeature, setGeoData } from "./map"
+import {
+  EMPTY_FC,
+  GREECE_BOUNDS,
+  TEAL,
+  fitBbox,
+  initMap,
+  rectFeature,
+  regionFeatures,
+  setGeoData,
+  setOverview,
+} from "./map"
+import { resolveOverview, type OverviewKind, type OverviewLayer } from "./overview"
 import { clearPending, loadPending, savePending, type PendingAoi } from "./pendingAoi"
 import { navigate, useRoute } from "./router"
 import { AlertsPage } from "./components/AlertsPage"
 import { AreasPanel, type SceneLayer } from "./components/AreasPanel"
 import type { SummaryState } from "./components/ChangeStrip"
 import type { BackfillState } from "./components/EmptyAreaState"
-import { ExplorePanel, drawnTitle } from "./components/ExplorePanel"
+import { ExplorePanel, SaveAreaButton, drawnTitle } from "./components/ExplorePanel"
 import { LandingPanel } from "./components/LandingPanel"
 import { NotFound } from "./components/NotFound"
+import { OverviewControl } from "./components/OverviewControl"
 import { Sheet } from "./components/Sheet"
 import { TopBar } from "./components/TopBar"
 import { WakingServer } from "./components/WakingServer"
@@ -37,6 +51,16 @@ const WAKING_AFTER_MS = 3000 // AC 6: say "waking" within 3 s
 const POLL_MS = 15_000
 const POLL_MAX = 20 // ~5 min after a backfill starts
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+const TITLES: Record<string, string | undefined> = {
+  landing: undefined,
+  explore: "Explore",
+  areas: "Saved areas",
+  alerts: "Alerts",
+  signin: "Sign in",
+  signup: "Create account",
+  notfound: "Not found",
+}
 
 const fc = (feature: GeoJSON.Feature): GeoJSON.FeatureCollection => ({
   type: "FeatureCollection",
@@ -57,6 +81,14 @@ export const App = () => {
   const [server, setServer] = useState<Server>("probing")
   const [attempt, setAttempt] = useState(0)
   const [summary, setSummary] = useState<SummaryState>({ status: "loading" })
+  const [regions, setRegions] = useState<RegionOut[]>([])
+  const [region, setRegion] = useState("thessaly")
+  const [regionZoomed, setRegionZoomed] = useState(false)
+  const [mapReady, setMapReady] = useState(false)
+  const [overviewOn, setOverviewOn] = useState(true)
+  const [overviewKind, setOverviewKind] = useState<OverviewKind>("greenness")
+  const [overviewLayer, setOverviewLayer] = useState<OverviewLayer | null>(null)
+  const zoomToRegionRef = useRef<(slug: string) => void>(() => {})
 
   const [aois, setAois] = useState<Aoi[]>([])
   const [aoisLoaded, setAoisLoaded] = useState(false)
@@ -109,12 +141,33 @@ export const App = () => {
     }
   }, [])
 
-  // public numbers for the landing strip — no auth, no 401
+  // page titles: landing has the full line, others "<Page> — Ombria"
+  useEffect(() => {
+    document.title = pageTitle(TITLES[route.name])
+  }, [route.name])
+
+  // public region registry (static) — outlines + labels on the Greece map
   useEffect(() => {
     if (server !== "up") return
     let cancelled = false
     void client
-      .GET("/v1/public/region/thessaly/summary")
+      .GET("/v1/public/regions")
+      .then(({ data }) => {
+        if (!cancelled && data) setRegions(data)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [server])
+
+  // public numbers for the landing strip — no auth, no 401
+  useEffect(() => {
+    if (server !== "up") return
+    let cancelled = false
+    setSummary({ status: "loading" })
+    void client
+      .GET("/v1/public/region/{slug}/summary", { params: { path: { slug: region } } })
       .then(({ data }) => {
         if (!cancelled) setSummary(data ? { status: "ready", data } : { status: "error" })
       })
@@ -124,7 +177,69 @@ export const App = () => {
     return () => {
       cancelled = true
     }
-  }, [server])
+  }, [server, region])
+
+  // --- Greece view: regions, overview ---------------------------------------
+  const zoomToRegion = useCallback(
+    (slug: string) => {
+      const r = regions.find((x) => x.slug === slug)
+      const map = mapRef.current
+      if (!r || !map) return
+      setRegion(slug)
+      setRegionZoomed(true)
+      fitBbox(map, r.bounds)
+    },
+    [regions],
+  )
+  zoomToRegionRef.current = zoomToRegion
+
+  const allGreece = useCallback(() => {
+    const map = mapRef.current
+    if (map) fitBbox(map, GREECE_BOUNDS)
+    setRegionZoomed(false)
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady || regions.length === 0) return
+    setGeoData(map, "regions", regionFeatures(regions))
+    // HTML labels: no glyph host needed (CSP), real buttons (keyboard + 44px)
+    const markers = regions.map((r) => {
+      const [x0 = 0, y0 = 0, x1 = 0, y1 = 0] = r.bounds
+      const el = document.createElement("button")
+      el.type = "button"
+      el.className = "region-label"
+      el.textContent = r.name
+      el.setAttribute("aria-label", `Zoom to ${r.name}`)
+      el.addEventListener("click", (e) => {
+        e.stopPropagation()
+        zoomToRegionRef.current(r.slug)
+      })
+      return new maplibregl.Marker({ element: el })
+        .setLngLat([(x0 + x1) / 2, (y0 + y1) / 2])
+        .addTo(map)
+    })
+    return () => markers.forEach((m) => m.remove())
+  }, [regions, mapReady])
+
+  useEffect(() => {
+    let cancelled = false
+    setOverviewLayer(null)
+    void resolveOverview(overviewKind).then((l) => {
+      if (!cancelled) setOverviewLayer(l)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [overviewKind])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    // under every field layer: scene tiles, region outlines, areas, drafts
+    const below = map.getLayer("scene-tiles") ? "scene-tiles" : "region-fill"
+    setOverview(map, overviewLayer, overviewOn, below)
+  }, [overviewLayer, overviewOn, mapReady])
 
   const refreshAois = useCallback(async () => {
     try {
@@ -155,6 +270,24 @@ export const App = () => {
     mapRef.current = map
 
     map.on("load", () => {
+      map.addSource("regions", { type: "geojson", data: EMPTY_FC })
+      map.addLayer({
+        id: "region-fill",
+        type: "fill",
+        source: "regions",
+        paint: { "fill-color": TEAL, "fill-opacity": 0.08 },
+      })
+      map.addLayer({
+        id: "region-line",
+        type: "line",
+        source: "regions",
+        paint: { "line-color": TEAL, "line-width": 3 },
+      })
+      map.on("click", "region-fill", (e) => {
+        if (drawRef.current.active) return
+        const slug = e.features?.[0]?.properties?.slug as string | undefined
+        if (slug) zoomToRegionRef.current(slug)
+      })
       map.addSource("aoi-geom", { type: "geojson", data: EMPTY_FC })
       map.addSource("draft", { type: "geojson", data: EMPTY_FC })
       map.addLayer({
@@ -181,6 +314,7 @@ export const App = () => {
         source: "draft",
         paint: { "line-color": "#f4f4f5", "line-width": 2, "line-dasharray": [2, 1.5] },
       })
+      setMapReady(true)
     })
 
     // one rectangle gesture for mouse and touch
@@ -337,7 +471,7 @@ export const App = () => {
       maxzoom: tj.maxzoom,
       attribution: "Contains modified Copernicus Sentinel data",
     })
-    map.addLayer({ id: "scene-tiles", type: "raster", source: "scene" }, "aoi-fill")
+    map.addLayer({ id: "scene-tiles", type: "raster", source: "scene" }, "region-fill")
   }, [])
 
   const handleSelectScene = useCallback(
@@ -474,12 +608,27 @@ export const App = () => {
       case "landing":
         return (
           <Sheet>
-            <LandingPanel summary={summary} signedIn={signedIn} waking={waking} attempt={attempt} />
+            <LandingPanel
+              summary={summary}
+              signedIn={signedIn}
+              waking={waking}
+              attempt={attempt}
+              regions={regions}
+              region={region}
+              onRegion={zoomToRegion}
+            />
           </Sheet>
         )
       case "explore":
         return (
-          <Sheet title={drawnTitle(pendingGeom)}>
+          <Sheet
+            title={drawnTitle(pendingGeom)}
+            footer={
+              pendingGeom ? (
+                <SaveAreaButton signedIn={signedIn} busy={saving} draftName={draftName} onSave={handleSave} />
+              ) : undefined
+            }
+          >
             <ExplorePanel
               signedIn={signedIn}
               drawing={drawMode}
@@ -534,6 +683,17 @@ export const App = () => {
         <div className="absolute inset-0">
           <div ref={containerRef} className="h-full w-full" />
         </div>
+        {!overlay && route.name !== "areas" && (
+          <OverviewControl
+            on={overviewOn}
+            kind={overviewKind}
+            layer={overviewLayer}
+            regionZoomed={regionZoomed}
+            onToggle={() => setOverviewOn((v) => !v)}
+            onKind={setOverviewKind}
+            onAllGreece={allGreece}
+          />
+        )}
         {sheet}
         {drawMode && (
           <div

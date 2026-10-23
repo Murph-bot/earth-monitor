@@ -10,7 +10,7 @@ const PAD = 8
 const SCALE = (v: number, min: number, max: number, outMin: number, outMax: number) =>
   max === min ? (outMin + outMax) / 2 : outMin + ((v - min) / (max - min)) * (outMax - outMin)
 
-// Thessaly scale s0..s5 over NDVI 0..0.8 — the same ramp as the map tiles
+// scale s0..s5 over NDVI 0..0.8 — the same ramp as the map tiles
 // (backend/app/tiles/render.py). Values stay in the tooltip: never colour alone.
 const NDVI_MAX = 0.8
 const scaleVar = (v: number) =>

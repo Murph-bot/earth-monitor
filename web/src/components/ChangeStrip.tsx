@@ -1,9 +1,9 @@
-import type { ThessalySummary } from "../api"
+import type { RegionSummary } from "../api"
 
 export type SummaryState =
   | { status: "loading" }
   | { status: "error" }
-  | { status: "ready"; data: ThessalySummary }
+  | { status: "ready"; data: RegionSummary }
 
 const Chip = ({ label, children, note }: { label: string; children: React.ReactNode; note: string }) => (
   <div className="min-w-[170px] flex-none rounded-[12px] border border-surface-2 bg-surface px-3.5 py-2.5">
@@ -28,7 +28,7 @@ export const ChangeStrip = ({ state }: { state: SummaryState }) => {
   if (state.status === "error")
     return <p className="text-sm text-muted">This week's numbers couldn't be loaded right now.</p>
 
-  const { greenness, rain, scenes, window_days } = state.data
+  const { greenness, rain, scenes, window_days, name } = state.data
   const delta = greenness.delta
   const trend =
     delta === null ? "" : Math.abs(delta) < 0.005 ? "≈ " : delta < 0 ? "▼ " : "▲ "
@@ -39,7 +39,7 @@ export const ChangeStrip = ({ state }: { state: SummaryState }) => {
   return (
     <div className="flex gap-2.5 overflow-x-auto pb-1">
       <Chip
-        label="Thessaly greenness"
+        label={`${name} greenness`}
         note={
           delta === null
             ? greenness.mean === null

@@ -106,7 +106,7 @@ def main() -> int:
             pg.goto(BASE + "/")
             pg.wait_for_selector("text=What changed this week")
             pg.wait_for_selector("text=0.41")
-            check(pg.title().startswith("Kampos"), f"title: {pg.title()}")
+            check(pg.title().startswith("Ombria"), f"title: {pg.title()}")
             check(not any(p_ == "/aois" for _, p_ in calls), "no /v1/aois call while logged out")
             check(pg.evaluate("document.documentElement.scrollWidth <= innerWidth"), "no horizontal scroll")
             small = pg.evaluate("""[...document.querySelectorAll('a,button,select,input,summary:not(.maplibregl-ctrl-attrib-button)')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&(r.height<43.5||r.width<43.5)}).map(e=>e.textContent.trim().slice(0,20)+':'+Math.round(e.getBoundingClientRect().height))""")
@@ -114,7 +114,7 @@ def main() -> int:
             top = pg.evaluate("document.querySelector('section').getBoundingClientRect().top")
             if vp["width"] < 900:
                 check(top / vp["height"] >= 0.6, f"map share above sheet {top / vp['height']:.0%}")
-            check("Kampos" in pg.inner_text("header") and "earth-monitor" not in pg.inner_text("body"), "wordmark Kampos, no leftover earth-monitor")
+            check("Ombria" in pg.inner_text("header") and "earth-monitor" not in pg.inner_text("body"), "wordmark Ombria, no leftover earth-monitor")
 
             # draw logged out -> sign up -> area saved
             pg.click("text=Explore the map")
@@ -126,13 +126,13 @@ def main() -> int:
             pg.click("text=Save this area — free account")
             pg.wait_for_selector("text=✓ Your drawn area is kept")
             check("/signup" in pg.url, "navigated to /signup")
-            check(pg.evaluate("sessionStorage.getItem('kampos:pendingAoi')") is not None, "pending polygon in sessionStorage")
+            check(pg.evaluate("localStorage.getItem('ombria:pendingAoi')") is not None, "pending polygon in localStorage")
             pg.fill("#email", "a@b.co"); pg.fill("#password", "longenough1")
             pg.click("text=Create account & save area")
             pg.wait_for_url("**/areas")
             pg.wait_for_selector("b:has-text('My first area')")
             check(len(created) == 1 and created[0]["name"] == "My first area", "POST /v1/aois with the drawn area")
-            check(pg.evaluate("sessionStorage.getItem('kampos:pendingAoi')") is None, "pending cleared after save")
+            check(pg.evaluate("localStorage.getItem('ombria:pendingAoi')") is None, "pending cleared after save")
             check(pg.locator("text=Collecting first data").count() > 0 or pg.locator("text=Backfill last 90 days").count() > 0, "empty state shown")
             check(not pg.locator("text=Delete area…").is_visible(), "delete hidden until Area settings opened")
             pg.click("text=Area settings"); pg.click("text=Delete area…")

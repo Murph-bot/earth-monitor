@@ -1,7 +1,19 @@
 // A polygon drawn while logged out survives sign-up (AC 21): it is parked in
-// sessionStorage under this key before the sign-up page opens, and saved to
-// the new account right after register/login, then cleared.
-const KEY = "kampos:pendingAoi"
+// localStorage under this key before the sign-up page opens (so it also
+// survives an email-confirm tab or a closed tab), and saved to the new
+// account right after register/login, then cleared.
+export const KEY = "ombria:pendingAoi"
+// pre-rename key (Kampos builds used sessionStorage); migrated on first read
+export const LEGACY_KEY = "kampos:pendingAoi"
+
+const migrateLegacy = () => {
+  for (const store of [localStorage, sessionStorage]) {
+    const old = store.getItem(LEGACY_KEY)
+    if (old === null) continue
+    if (localStorage.getItem(KEY) === null) localStorage.setItem(KEY, old)
+    store.removeItem(LEGACY_KEY)
+  }
+}
 
 export interface PendingAoi {
   geometry: GeoJSON.Polygon
@@ -10,7 +22,7 @@ export interface PendingAoi {
 
 export const savePending = (p: PendingAoi) => {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify(p))
+    localStorage.setItem(KEY, JSON.stringify(p))
   } catch {
     // storage blocked (private mode): the draw is lost, sign-up still works
   }
@@ -18,7 +30,8 @@ export const savePending = (p: PendingAoi) => {
 
 export const loadPending = (): PendingAoi | null => {
   try {
-    const raw = sessionStorage.getItem(KEY)
+    migrateLegacy()
+    const raw = localStorage.getItem(KEY)
     if (!raw) return null
     const p = JSON.parse(raw) as Partial<PendingAoi>
     if (p.geometry?.type !== "Polygon" || !Array.isArray(p.geometry.coordinates)) return null
@@ -30,7 +43,9 @@ export const loadPending = (): PendingAoi | null => {
 
 export const clearPending = () => {
   try {
-    sessionStorage.removeItem(KEY)
+    localStorage.removeItem(KEY)
+    localStorage.removeItem(LEGACY_KEY)
+    sessionStorage.removeItem(LEGACY_KEY)
   } catch {
     // nothing to clear
   }

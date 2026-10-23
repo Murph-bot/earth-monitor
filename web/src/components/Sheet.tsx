@@ -3,7 +3,17 @@ import { useState, type ReactNode } from "react"
 // Phone (<900px): bottom sheet that peeks at <=32svh so the map keeps >=60%
 // of the screen; the handle expands it. Desktop (>=900px): floating 380px
 // panel. The title is a single truncated line.
-export const Sheet = ({ title, children }: { title?: string; children: ReactNode }) => {
+// `footer` is pinned to the bottom of the sheet (sticky), so a primary action
+// such as "Save this area" stays visible even while the phone sheet is collapsed.
+export const Sheet = ({
+  title,
+  children,
+  footer,
+}: {
+  title?: string
+  children: ReactNode
+  footer?: ReactNode
+}) => {
   const [open, setOpen] = useState(false)
   return (
     <section
@@ -25,6 +35,11 @@ export const Sheet = ({ title, children }: { title?: string; children: ReactNode
         <h2 className="mb-2.5 truncate text-lg font-bold whitespace-nowrap desk:mt-4">{title}</h2>
       )}
       {children}
+      {footer && (
+        <div className="sticky bottom-0 -mx-4 mt-3 border-t border-surface-2 bg-surface px-4 pt-2.5 pb-1">
+          {footer}
+        </div>
+      )}
     </section>
   )
 }

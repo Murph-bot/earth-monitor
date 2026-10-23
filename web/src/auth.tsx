@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react"
 import { client } from "./api"
+import { BRAND } from "./brand"
 import { Link } from "./router"
 import { polygonKm2, type PendingAoi } from "./pendingAoi"
 import { Turnstile, TURNSTILE_SITE_KEY } from "./components/Turnstile"
@@ -92,7 +93,7 @@ export const AuthForm = ({
       )}
       <form onSubmit={handleSubmit} className="rounded-md border border-surface-2 bg-surface p-4">
         <h1 className="mb-3 text-2xl leading-tight font-bold">
-          {signup ? "Create your free Kampos account" : "Sign in to Kampos"}
+          {signup ? `Create your free ${BRAND} account` : `Sign in to ${BRAND}`}
         </h1>
         <div className="mb-3">
           <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
@@ -152,7 +153,7 @@ export const AuthForm = ({
           </button>
         </div>
         <p className="mt-3 text-center text-sm text-muted">
-          {signup ? "Have an account? " : "New to Kampos? "}
+          {signup ? "Have an account? " : `New to ${BRAND}? `}
           <Link
             to={signup ? "/signin" : "/signup"}
             className="inline-flex items-center font-medium text-accent"

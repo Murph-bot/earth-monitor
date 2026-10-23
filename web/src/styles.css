@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "maplibre-gl/dist/maplibre-gl.css";
 
-/* Kampos design tokens (design brief 2026-10-23, mockups/tokens.css).
+/* Ombria design tokens (design brief 2026-10-23, mockups/tokens.css).
    Contrast pairs were checked in the brief; --border-ui is for input
    borders (3:1), --border for decorative dividers only. */
 @theme {
@@ -21,7 +21,7 @@
   --color-rain: #60a5fa;
   --color-warn: #fbbf24;
 
-  /* the Thessaly scale: ochre (dry) -> teal (lush) */
+  /* the scale: ochre (dry) -> teal (lush) */
   --color-s0: #9a5c16;
   --color-s1: #b7791f;
   --color-s2: #d6c25a;
@@ -113,4 +113,25 @@
 .maplibregl-ctrl-attrib-button {
   min-height: 0;
   min-width: 0;
+}
+
+/* Region labels on the Greece map (design brief §10): >=13px, white with a
+   dark halo (18.1:1), a real button so click/Enter zooms to the region. */
+.region-label {
+  min-height: var(--spacing-tap);
+  padding: 0 8px;
+  background: transparent;
+  border: 0;
+  color: #f4f4f5;
+  font: 700 15px/1 var(--font-sans);
+  text-shadow:
+    0 0 3px #09090b,
+    0 0 3px #09090b,
+    0 0 6px #09090b;
+  cursor: pointer;
+}
+@media (max-width: 899px) {
+  .region-label {
+    font-size: 13px;
+  }
 }

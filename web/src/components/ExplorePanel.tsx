@@ -39,14 +39,6 @@ export const ExplorePanel = (p: Props) => {
           <button
             type="button"
             disabled={p.busy || (p.signedIn && !p.draftName.trim())}
-            onClick={() => p.onSave("save")}
-            className="rounded-sm bg-accent px-[18px] font-semibold text-accent-ink disabled:opacity-60"
-          >
-            {p.signedIn ? "Save this area" : "Save this area — free account"}
-          </button>
-          <button
-            type="button"
-            disabled={p.busy || (p.signedIn && !p.draftName.trim())}
             onClick={() => p.onSave("alert")}
             className="rounded-sm border border-border bg-surface-2 px-[18px] font-semibold disabled:opacity-60"
           >
@@ -73,7 +65,7 @@ export const ExplorePanel = (p: Props) => {
       <p className="mb-3 text-muted">
         {p.drawing
           ? "Drag a rectangle on the map around your field."
-          : "Draw any field or area in Thessaly. No account needed to look."}
+          : "Draw any field or area anywhere in Greece. No account needed to look."}
       </p>
       <button
         type="button"
@@ -89,4 +81,16 @@ export const ExplorePanel = (p: Props) => {
 }
 
 export const drawnTitle = (g: GeoJSON.Polygon | null) =>
-  g ? `Your drawn area · ${polygonKm2(g).toFixed(1)} km²` : "Explore Thessaly"
+  g ? `Your drawn area · ${polygonKm2(g).toFixed(1)} km²` : "Explore Greece"
+
+// Pinned in the sheet footer so it is visible with the phone sheet collapsed.
+export const SaveAreaButton = (p: Pick<Props, "signedIn" | "busy" | "draftName" | "onSave">) => (
+  <button
+    type="button"
+    disabled={p.busy || (p.signedIn && !p.draftName.trim())}
+    onClick={() => p.onSave("save")}
+    className="w-full rounded-sm bg-accent px-[18px] font-semibold text-accent-ink disabled:opacity-60"
+  >
+    {p.signedIn ? "Save this area" : "Save this area — free account"}
+  </button>
+)
