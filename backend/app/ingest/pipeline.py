@@ -311,8 +311,10 @@ def missing_scenes(
     now = now or datetime.now(UTC)
     start = (now - timedelta(days=lookback_days)).date()
     gaps: dict[str, list[str]] = {}
+    aois_checked = items_checked = items_stored = 0
     for aoi_id, geom, _ in _aois_with_watermarks(conn, adapter.sensor_id):
         metas = adapter.search(geom, start, now.date())
+        aois_checked += 1
         if not metas:
             continue
         stored = {
@@ -327,7 +329,19 @@ def missing_scenes(
         # a catalog footprint can touch the AOI by intersects yet produce no
         # coverage row only if it is absent from `scenes` — so absence = miss
         missing = sorted(m.scene_id for m in metas if m.scene_id not in stored)
+        items_checked += len(metas)
+        items_stored += len(metas) - len(missing)
         if missing:
             log.error("catalog_gap", sensor_id=adapter.sensor_id, aoi_id=aoi_id, missing=missing)
             gaps[aoi_id] = missing
+    if not gaps:
+        log.info(
+            "catalog_audit_ok",
+            sensor_id=adapter.sensor_id,
+            lookback_days=lookback_days,
+            aois_checked=aois_checked,
+            catalog_items_checked=items_checked,
+            stored=items_stored,
+            missing=0,
+        )
     return gaps

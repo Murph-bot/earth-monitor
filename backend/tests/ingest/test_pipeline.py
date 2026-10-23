@@ -264,3 +264,21 @@ def test_run_due_reports_failed_sensors(
     monkeypatch.setattr(sched, "get_adapter", lambda _sid: FakeAdapter(boom=True))
     monkeypatch.setattr(sched, "_is_enabled", lambda _c, sid: sid == "sentinel-2")
     assert run_due(db, get_settings(), force=True) == ["sentinel-2"]
+
+
+def test_once_exits_1_when_catalog_has_missing_scenes(
+    db: psycopg.Connection, aoi_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.ingest.__main__ as ingest_main
+
+    adapter = FakeAdapter([_meta("S2_OCT19", COVERING), _meta("S2_OCT21", COVERING)])
+    monkeypatch.setattr(ingest_main, "ensure_region_aois", lambda _c: None)
+    monkeypatch.setattr(ingest_main, "run_due", lambda _c, _s, force=False: [])
+    monkeypatch.setattr(ingest_main, "all_adapters", lambda: {"sentinel-2": adapter})
+    monkeypatch.setattr(ingest_main, "_is_enabled", lambda _c, sid: sid == "sentinel-2")
+    monkeypatch.setattr(ingest_main, "stale_sensors", lambda _c, _a: [])
+
+    assert ingest_main._once(db) == 1  # sweep green, but the catalog audit finds gaps
+
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    assert ingest_main._once(db) == 0  # nothing missing once stored
