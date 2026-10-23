@@ -119,6 +119,29 @@ def _aois_with_watermarks(
     return [(str(r[0]), json.loads(r[1]), r[2]) for r in rows]
 
 
+class CatalogGapError(Exception):
+    """The catalog has scenes over an AOI that the database does not."""
+
+
+def _aoi_geom(conn: psycopg.Connection, aoi_id: str) -> GeoJSONGeom:
+    row = conn.execute("SELECT ST_AsGeoJSON(geom) FROM aois WHERE id = %s", (aoi_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no aoi '{aoi_id}'")
+    geom: GeoJSONGeom = json.loads(row[0])
+    return geom
+
+
+def _store_scenes(conn: psycopg.Connection, metas: list[SceneMeta]) -> tuple[int, list[int]]:
+    inserted = 0
+    scene_ids: list[int] = []
+    for meta in metas:
+        scene_id, is_new = _upsert_scene(conn, meta)
+        inserted += int(is_new)
+        scene_ids.append(scene_id)
+        _refresh_coverage(conn, scene_id)
+    return inserted, scene_ids
+
+
 def ingest_sensor(
     conn: psycopg.Connection,
     adapter: SensorAdapter,
@@ -157,11 +180,9 @@ def ingest_sensor(
             aois_checked += 1
             found += len(metas)
             with conn.transaction():
-                for meta in metas:
-                    scene_id, is_new = _upsert_scene(conn, meta)
-                    inserted += int(is_new)
-                    scene_ids.append(scene_id)
-                    _refresh_coverage(conn, scene_id)
+                n_new, ids = _store_scenes(conn, metas)
+                inserted += n_new
+                scene_ids.extend(ids)
                 _update_watermark(
                     conn, row_aoi_id, sensor_id, max((m.acquired_at for m in metas), default=None)
                 )
@@ -217,3 +238,96 @@ def stale_sensors(
             log.warning("sensor_stale", sensor_id=adapter.sensor_id, newest_scene=str(newest))
             stale.append(adapter.sensor_id)
     return stale
+
+
+def backfill_aoi(
+    conn: psycopg.Connection,
+    adapter: SensorAdapter,
+    aoi_id: str,
+    start: date,
+    end: date,
+    *,
+    analyze: bool = True,
+) -> RunStats:
+    """Re-search one AOI over an explicit [start, end] window and upsert what
+    the catalog has. Idempotent (natural-key upserts) and leaves the sweep
+    watermark alone, so it is safe to run alongside the cron."""
+    geom = _aoi_geom(conn, aoi_id)
+    with conn.transaction():
+        row = conn.execute(
+            "INSERT INTO ingestion_runs (sensor_id) VALUES (%s) RETURNING id",
+            (adapter.sensor_id,),
+        ).fetchone()
+        assert row is not None
+        run_id = int(row[0])
+    metrics_written = 0
+    try:
+        metas = adapter.search(geom, start, end)
+        with conn.transaction():
+            inserted, scene_ids = _store_scenes(conn, metas)
+        if analyze:
+            metrics_written = analyze_pending(conn, adapter)
+    except Exception as exc:
+        with conn.transaction():
+            conn.execute(
+                """UPDATE ingestion_runs SET finished_at = now(), status = 'failed', error = %s
+                   WHERE id = %s""",
+                (f"backfill {aoi_id} {start}..{end}: {exc}"[:2000], run_id),
+            )
+        raise
+    with conn.transaction():
+        conn.execute(
+            """UPDATE ingestion_runs SET finished_at = now(), status = 'success',
+                   scenes_found = %s, scenes_inserted = %s, metrics_written = %s
+               WHERE id = %s""",
+            (len(metas), inserted, metrics_written, run_id),
+        )
+    log.info(
+        "backfill_ok",
+        sensor_id=adapter.sensor_id,
+        aoi_id=aoi_id,
+        start=str(start),
+        end=str(end),
+        found=len(metas),
+        inserted=inserted,
+    )
+    return RunStats(adapter.sensor_id, 1, len(metas), inserted, metrics_written, scene_ids)
+
+
+def missing_scenes(
+    conn: psycopg.Connection,
+    adapter: SensorAdapter,
+    *,
+    lookback_days: int = 7,
+    now: datetime | None = None,
+) -> dict[str, list[str]]:
+    """Independent audit of the sweep: re-ask the catalog what it has over each
+    AOI in the last `lookback_days` and return {aoi_id: [scene ids]} for
+    items with no stored scene_aois row. Empty dict = nothing missed.
+
+    This catches every way a green sweep can silently save nothing (window
+    drift, watermark races, filter bugs) because it does not share the
+    sweep's window arithmetic."""
+    now = now or datetime.now(UTC)
+    start = (now - timedelta(days=lookback_days)).date()
+    gaps: dict[str, list[str]] = {}
+    for aoi_id, geom, _ in _aois_with_watermarks(conn, adapter.sensor_id):
+        metas = adapter.search(geom, start, now.date())
+        if not metas:
+            continue
+        stored = {
+            r[0]
+            for r in conn.execute(
+                """SELECT s.scene_key FROM scenes s
+                   JOIN scene_aois sa ON sa.scene_id = s.id
+                   WHERE sa.aoi_id = %s AND s.sensor_id = %s AND s.scene_key = ANY(%s)""",
+                (aoi_id, adapter.sensor_id, [m.scene_id for m in metas]),
+            ).fetchall()
+        }
+        # a catalog footprint can touch the AOI by intersects yet produce no
+        # coverage row only if it is absent from `scenes` — so absence = miss
+        missing = sorted(m.scene_id for m in metas if m.scene_id not in stored)
+        if missing:
+            log.error("catalog_gap", sensor_id=adapter.sensor_id, aoi_id=aoi_id, missing=missing)
+            gaps[aoi_id] = missing
+    return gaps

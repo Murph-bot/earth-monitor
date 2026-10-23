@@ -54,7 +54,10 @@ def due_sensors(conn: psycopg.Connection, settings: Settings) -> list[str]:
     return due
 
 
-def run_due(conn: psycopg.Connection, settings: Settings, *, force: bool = False) -> None:
+def run_due(conn: psycopg.Connection, settings: Settings, *, force: bool = False) -> list[str]:
+    """Sweep due (or, with force, all enabled) sensors; returns the ids whose
+    sweep raised, so a one-shot caller can turn them into a failed exit."""
+    failed: list[str] = []
     sensors = (
         [s for s in all_adapters() if _is_enabled(conn, s)]
         if force
@@ -72,6 +75,7 @@ def run_due(conn: psycopg.Connection, settings: Settings, *, force: bool = False
         except Exception:
             # per-sensor isolation: a failed adapter doesn't stop the sweep
             log.exception("sensor_sweep_failed", sensor_id=sensor_id)
+            failed.append(sensor_id)
     if _is_enabled(conn, RAIN_SOURCE):
         try:
             ingest_rain(
@@ -79,6 +83,8 @@ def run_due(conn: psycopg.Connection, settings: Settings, *, force: bool = False
             )
         except Exception:
             log.exception("rain_sweep_failed")
+            failed.append(RAIN_SOURCE)
+    return failed
 
 
 def _is_enabled(conn: psycopg.Connection, sensor_id: str) -> bool:
