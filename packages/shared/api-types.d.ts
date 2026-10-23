@@ -107,6 +107,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/aois/{aoi_id}/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Backfill Aoi Route
+         * @description Ingest the last 90 days of scenes and rain for this AOI, in the
+         *     background. Owner only (404 otherwise); 409 while one is already running.
+         */
+        post: operations["backfill_aoi_route_v1_aois__aoi_id__backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/aois/{aoi_id}": {
         parameters: {
             query?: never;
@@ -281,6 +302,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/region/thessaly/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Thessaly Summary
+         * @description This week's Thessaly numbers for the landing page: mean greenness (NDVI)
+         *     vs the week before, mean 7-day rain, and clear vs cloudy scenes. Aggregated
+         *     over monitored areas inside the region; null where there is no data.
+         */
+        get: operations["thessaly_summary_v1_public_region_thessaly_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -406,6 +449,10 @@ export interface components {
             };
             /** Sensor State */
             sensor_state: components["schemas"]["SensorStateOut"][];
+            /** Next Pass Estimate */
+            next_pass_estimate: string | null;
+            /** Next Pass Basis */
+            next_pass_basis: ("last_scene_cadence" | "revisit_upper_bound") | null;
         };
         /** AoiOut */
         AoiOut: {
@@ -433,6 +480,21 @@ export interface components {
             name?: string | null;
             /** Is Public */
             is_public?: boolean | null;
+        };
+        /** BackfillOut */
+        BackfillOut: {
+            /**
+             * Aoi Id
+             * Format: uuid
+             */
+            aoi_id: string;
+            /** Days */
+            days: number;
+            /**
+             * Status
+             * @constant
+             */
+            status: "scheduled";
         };
         /** BandOut */
         BandOut: {
@@ -471,6 +533,17 @@ export interface components {
             /** Processing Level */
             processing_level: string;
         };
+        /** GreennessSummary */
+        GreennessSummary: {
+            /** Mean */
+            mean: number | null;
+            /** Previous Mean */
+            previous_mean: number | null;
+            /** Delta */
+            delta: number | null;
+            /** Areas */
+            areas: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -485,6 +558,8 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Turnstile Token */
+            turnstile_token?: string | null;
         };
         /** MetricPoint */
         MetricPoint: {
@@ -600,6 +675,13 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** RainSummary */
+        RainSummary: {
+            /** Mean Mm */
+            mean_mm: number | null;
+            /** Areas */
+            areas: number;
+        };
         /** RegisterIn */
         RegisterIn: {
             /**
@@ -611,6 +693,17 @@ export interface components {
             password: string;
             /** Display Name */
             display_name?: string | null;
+            /** Turnstile Token */
+            turnstile_token?: string | null;
+        };
+        /** SceneCountSummary */
+        SceneCountSummary: {
+            /** Clear */
+            clear: number;
+            /** Cloudy */
+            cloudy: number;
+            /** Latest Scene At */
+            latest_scene_at: string | null;
         };
         /** SceneDetail */
         SceneDetail: {
@@ -713,6 +806,28 @@ export interface components {
             last_checked_at: string | null;
             /** Last Scene At */
             last_scene_at: string | null;
+        };
+        /** ThessalySummary */
+        ThessalySummary: {
+            /**
+             * Region
+             * @constant
+             */
+            region: "thessaly";
+            /** Bounds */
+            bounds: number[];
+            /** Window Days */
+            window_days: number;
+            /** Clear Max Cloud Pct */
+            clear_max_cloud_pct: number;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            greenness: components["schemas"]["GreennessSummary"];
+            rain: components["schemas"]["RainSummary"];
+            scenes: components["schemas"]["SceneCountSummary"];
         };
         /** TokenOut */
         TokenOut: {
@@ -943,6 +1058,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AoiOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    backfill_aoi_route_v1_aois__aoi_id__backfill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                aoi_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackfillOut"];
                 };
             };
             /** @description Validation Error */
@@ -1193,6 +1339,8 @@ export interface operations {
                 assets?: string | null;
                 /** @description reflectance display max */
                 stretch?: number;
+                /** @description render this index in the Thessaly scale instead of RGB bands */
+                index?: "ndvi" | null;
             };
             header?: never;
             path: {
@@ -1413,6 +1561,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thessaly_summary_v1_public_region_thessaly_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThessalySummary"];
                 };
             };
         };

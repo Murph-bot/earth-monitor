@@ -245,6 +245,47 @@
         }
       }
     },
+    "/v1/aois/{aoi_id}/backfill": {
+      "post": {
+        "summary": "Backfill Aoi Route",
+        "description": "Ingest the last 90 days of scenes and rain for this AOI, in the\nbackground. Owner only (404 otherwise); 409 while one is already running.",
+        "operationId": "backfill_aoi_route_v1_aois__aoi_id__backfill_post",
+        "parameters": [
+          {
+            "name": "aoi_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Aoi Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackfillOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/aois/{aoi_id}": {
       "get": {
         "summary": "Get Aoi",
@@ -701,6 +742,25 @@
               "title": "Stretch"
             },
             "description": "reflectance display max"
+          },
+          {
+            "name": "index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "ndvi",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "render this index in the Thessaly scale instead of RGB bands",
+              "title": "Index"
+            },
+            "description": "render this index in the Thessaly scale instead of RGB bands"
           }
         ],
         "responses": {
@@ -987,6 +1047,25 @@
         }
       }
     },
+    "/v1/public/region/thessaly/summary": {
+      "get": {
+        "summary": "Thessaly Summary",
+        "description": "This week's Thessaly numbers for the landing page: mean greenness (NDVI)\nvs the week before, mean 7-day rain, and clear vs cloudy scenes. Aggregated\nover monitored areas inside the region; null where there is no data.",
+        "operationId": "thessaly_summary_v1_public_region_thessaly_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThessalySummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "summary": "Health",
@@ -1222,6 +1301,33 @@
             },
             "type": "array",
             "title": "Sensor State"
+          },
+          "next_pass_estimate": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Pass Estimate"
+          },
+          "next_pass_basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "last_scene_cadence",
+                  "revisit_upper_bound"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Pass Basis"
           }
         },
         "type": "object",
@@ -1233,7 +1339,9 @@
           "bbox",
           "created_at",
           "geom",
-          "sensor_state"
+          "sensor_state",
+          "next_pass_estimate",
+          "next_pass_basis"
         ],
         "title": "AoiDetail"
       },
@@ -1305,6 +1413,31 @@
         },
         "type": "object",
         "title": "AoiUpdate"
+      },
+      "BackfillOut": {
+        "properties": {
+          "aoi_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Aoi Id"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "status": {
+            "type": "string",
+            "const": "scheduled",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "aoi_id",
+          "days",
+          "status"
+        ],
+        "title": "BackfillOut"
       },
       "BandOut": {
         "properties": {
@@ -1407,6 +1540,55 @@
         ],
         "title": "CollectionOut"
       },
+      "GreennessSummary": {
+        "properties": {
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "previous_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Mean"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "areas": {
+            "type": "integer",
+            "title": "Areas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mean",
+          "previous_mean",
+          "delta",
+          "areas"
+        ],
+        "title": "GreennessSummary"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1432,6 +1614,18 @@
             "maxLength": 200,
             "minLength": 1,
             "title": "Password"
+          },
+          "turnstile_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnstile Token"
           }
         },
         "type": "object",
@@ -1751,6 +1945,31 @@
         ],
         "title": "Page[SensorOut]"
       },
+      "RainSummary": {
+        "properties": {
+          "mean_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Mm"
+          },
+          "areas": {
+            "type": "integer",
+            "title": "Areas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mean_mm",
+          "areas"
+        ],
+        "title": "RainSummary"
+      },
       "RegisterIn": {
         "properties": {
           "email": {
@@ -1775,6 +1994,18 @@
               }
             ],
             "title": "Display Name"
+          },
+          "turnstile_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnstile Token"
           }
         },
         "type": "object",
@@ -1783,6 +2014,37 @@
           "password"
         ],
         "title": "RegisterIn"
+      },
+      "SceneCountSummary": {
+        "properties": {
+          "clear": {
+            "type": "integer",
+            "title": "Clear"
+          },
+          "cloudy": {
+            "type": "integer",
+            "title": "Cloudy"
+          },
+          "latest_scene_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Scene At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clear",
+          "cloudy",
+          "latest_scene_at"
+        ],
+        "title": "SceneCountSummary"
       },
       "SceneDetail": {
         "properties": {
@@ -2088,6 +2350,56 @@
           "last_scene_at"
         ],
         "title": "SensorStateOut"
+      },
+      "ThessalySummary": {
+        "properties": {
+          "region": {
+            "type": "string",
+            "const": "thessaly",
+            "title": "Region"
+          },
+          "bounds": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bounds"
+          },
+          "window_days": {
+            "type": "integer",
+            "title": "Window Days"
+          },
+          "clear_max_cloud_pct": {
+            "type": "number",
+            "title": "Clear Max Cloud Pct"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "greenness": {
+            "$ref": "#/components/schemas/GreennessSummary"
+          },
+          "rain": {
+            "$ref": "#/components/schemas/RainSummary"
+          },
+          "scenes": {
+            "$ref": "#/components/schemas/SceneCountSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "region",
+          "bounds",
+          "window_days",
+          "clear_max_cloud_pct",
+          "generated_at",
+          "greenness",
+          "rain",
+          "scenes"
+        ],
+        "title": "ThessalySummary"
       },
       "TokenOut": {
         "properties": {
