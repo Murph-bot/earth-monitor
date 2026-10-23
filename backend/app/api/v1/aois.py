@@ -7,20 +7,24 @@ ST_GeomFromGeoJSON/ST_IsValid path ingestion trusts.
 """
 
 import json
+import math
 import uuid
+from datetime import UTC, datetime, timedelta
 from datetime import date as dt_date
-from typing import Any
+from typing import Any, Literal
 
 import psycopg
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
-from app.api.deps import CurrentUser, DbConn
+from app.api.deps import Backfill, CurrentUser, DbConn
 from app.api.errors import not_found
+from app.api.ratelimit import rate_limit
 from app.api.v1.schemas import (
     AoiCreate,
     AoiDetail,
     AoiOut,
     AoiUpdate,
+    BackfillOut,
     Bbox,
     MetricPoint,
     MetricSeries,
@@ -30,8 +34,11 @@ from app.api.v1.schemas import (
     SensorStateOut,
 )
 from app.config import get_settings
+from app.ingest.backfill import BACKFILL_DAYS, is_running
 
 router = APIRouter()
+
+NEXT_PASS_SENSOR = "sentinel-2"
 
 _AOI_COLS = "id, name, is_public, area_m2, created_at"
 
@@ -60,11 +67,29 @@ def _get_aoi(
     return row
 
 
+def next_pass_estimate(
+    last_scene_at: datetime | None, revisit_days: float | None, now: datetime
+) -> tuple[datetime, Literal["last_scene_cadence", "revisit_upper_bound"]] | None:
+    """Estimate the next pass of a sensor over an AOI. This is not an orbit
+    calendar: with a stored scene it steps that scene's date forward by whole
+    revisit cycles past `now`; with none, the pass is at most one revisit
+    cycle away, so now + revisit is an upper bound. Callers must say "≈"."""
+    if not revisit_days or revisit_days <= 0:
+        return None
+    cycle = timedelta(days=revisit_days)
+    if last_scene_at is None:
+        return now + cycle, "revisit_upper_bound"
+    behind = max((now - last_scene_at) / cycle, 0.0)
+    return last_scene_at + cycle * (math.floor(behind) + 1), "last_scene_cadence"
+
+
 @router.post("/aois", status_code=201)
 def create_aoi(
     body: AoiCreate,
     db: DbConn,
     user_id: CurrentUser,
+    background: BackgroundTasks,
+    backfill: Backfill,
 ) -> AoiOut:
     geom = json.dumps(body.geojson)
     max_m2 = get_settings().max_aoi_area_km2 * 1e6
@@ -99,7 +124,33 @@ def create_aoi(
             status_code=422, detail=f"invalid geometry: {exc.diag.message_primary or exc}"
         ) from exc
     assert row is not None
-    return _aoi_out(row)
+    out = _aoi_out(row)
+    # a new area gets its past data filled in now, not at the next sweep
+    background.add_task(backfill, out.id)
+    return out
+
+
+@router.post(
+    "/aois/{aoi_id}/backfill",
+    status_code=202,
+    dependencies=[rate_limit("backfill", get_settings().rate_backfill_per_minute)],
+)
+def backfill_aoi_route(
+    aoi_id: uuid.UUID,
+    db: DbConn,
+    user_id: CurrentUser,
+    background: BackgroundTasks,
+    backfill: Backfill,
+) -> BackfillOut:
+    """Ingest the last 90 days of scenes and rain for this AOI, in the
+    background. Owner only (404 otherwise); 409 while one is already running."""
+    _get_aoi(db, aoi_id, user_id)
+    if is_running(str(aoi_id)):
+        raise HTTPException(
+            409, "a backfill is already running for this area", headers={"x-error-code": "BUSY"}
+        )
+    background.add_task(backfill, aoi_id)
+    return BackfillOut(aoi_id=aoi_id, days=BACKFILL_DAYS, status="scheduled")
 
 
 @router.get("/aois")
@@ -136,12 +187,25 @@ def get_aoi(
            FROM aoi_sensor_state WHERE aoi_id = %s""",
         (aoi_id,),
     ).fetchall()
+    last = db.execute(
+        """SELECT max(s.acquired_at)
+           FROM scene_aois sa JOIN scenes s ON s.id = sa.scene_id
+           WHERE sa.aoi_id = %s AND s.sensor_id = %s""",
+        (aoi_id, NEXT_PASS_SENSOR),
+    ).fetchone()
+    sensor = db.execute(
+        "SELECT revisit_days FROM sensors WHERE id = %s", (NEXT_PASS_SENSOR,)
+    ).fetchone()
+    revisit = float(sensor[0]) if sensor and sensor[0] is not None else None
+    est = next_pass_estimate(last[0] if last else None, revisit, datetime.now(UTC))
     return AoiDetail(
         **_aoi_out(row).model_dump(),
         geom=json.loads(geom),
         sensor_state=[
             SensorStateOut(sensor_id=s[0], last_checked_at=s[1], last_scene_at=s[2]) for s in state
         ],
+        next_pass_estimate=est[0] if est else None,
+        next_pass_basis=est[1] if est else None,
     )
 
 

@@ -28,31 +28,32 @@ def ingest_rain(
     today: date,
     backfill_days: int,
     fetch: Callable[[date], np.ndarray | None] = pdir_now.fetch_daily,
+    aoi_id: str | None = None,
 ) -> int:
-    """Fill missing daily rainfall for every AOI; returns rows written.
-    Today is excluded: its daily total is not complete yet."""
+    """Fill missing daily rainfall for every AOI (or just `aoi_id`); returns
+    rows written. Today is excluded: its daily total is not complete yet."""
     days = [today - timedelta(days=k) for k in range(backfill_days, 0, -1)]
     missing = conn.execute(
         """SELECT d::date, a.id,
                   ST_XMin(a.bbox), ST_YMin(a.bbox), ST_XMax(a.bbox), ST_YMax(a.bbox)
            FROM aois a CROSS JOIN unnest(%s::date[]) AS d
-           WHERE NOT EXISTS (
+           WHERE (%s::uuid IS NULL OR a.id = %s::uuid) AND NOT EXISTS (
                SELECT 1 FROM daily_metrics m
                WHERE m.aoi_id = a.id AND m.date = d
                  AND m.metric_name = %s AND m.source = %s)
            ORDER BY d""",
-        (days, RAIN_METRIC, RAIN_SOURCE),
+        (days, aoi_id, aoi_id, RAIN_METRIC, RAIN_SOURCE),
     ).fetchall()
     by_day: dict[date, list[tuple[object, pdir_now.Bbox]]] = defaultdict(list)
-    for day, aoi_id, minx, miny, maxx, maxy in missing:
-        by_day[day].append((aoi_id, (minx, miny, maxx, maxy)))
+    for day, row_aoi_id, minx, miny, maxx, maxy in missing:
+        by_day[day].append((row_aoi_id, (minx, miny, maxx, maxy)))
 
     written = 0
     for day, aois in by_day.items():
         grid = fetch(day)
         if grid is None:
             continue
-        for aoi_id, bbox in aois:
+        for row_aoi_id, bbox in aois:
             mm = pdir_now.aoi_rain_mm(grid, bbox)
             if mm is None:
                 continue
@@ -62,11 +63,11 @@ def ingest_rain(
                        VALUES (%s, %s, %s, %s, %s, 'mm')
                        ON CONFLICT (aoi_id, metric_name, source, date)
                        DO UPDATE SET value = EXCLUDED.value""",
-                    (aoi_id, day, RAIN_METRIC, RAIN_SOURCE, mm),
+                    (row_aoi_id, day, RAIN_METRIC, RAIN_SOURCE, mm),
                 )
                 evaluate_metric(
                     conn,
-                    aoi_id=aoi_id,
+                    aoi_id=row_aoi_id,
                     scene_id=None,
                     sensor_id=RAIN_SOURCE,
                     metric_name=RAIN_METRIC,

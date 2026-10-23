@@ -8,6 +8,7 @@ The fixture is session-scoped: migrations run once per test session.
 """
 
 import os
+import uuid
 from collections.abc import Iterator
 
 import psycopg
@@ -66,10 +67,16 @@ def clean(db: psycopg.Connection) -> psycopg.Connection:
 
 
 @pytest.fixture
-def client(clean: psycopg.Connection) -> Iterator[TestClient]:
+def backfills() -> list[uuid.UUID]:
+    """AOI ids whose backfill the app scheduled during the test."""
+    return []
+
+
+@pytest.fixture
+def client(backfills: list[uuid.UUID], clean: psycopg.Connection) -> Iterator[TestClient]:
     """TestClient over the real test DB — get_db overridden to the session
     conn so endpoint writes ride savepoints and roll back."""
-    from app.api.deps import get_db
+    from app.api.deps import get_backfill_runner, get_db
     from app.main import create_app
 
     app = create_app()
@@ -78,5 +85,7 @@ def client(clean: psycopg.Connection) -> Iterator[TestClient]:
         yield clean
 
     app.dependency_overrides[get_db] = _db
+    # never ingest from a test: record the scheduled backfills instead
+    app.dependency_overrides[get_backfill_runner] = lambda: backfills.append
     with TestClient(app) as c:
         yield c

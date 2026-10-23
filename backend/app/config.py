@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     max_aoi_area_km2: float = 500.0  # windowed reads scale with AOI area
     rate_auth_per_minute: int = 10  # register + login, per client IP
     rate_tiles_per_minute: int = 600  # a map pan loads dozens of tiles at once
+    rate_backfill_per_minute: int = 3  # POST /aois/{id}/backfill, per client IP
+    # Cloudflare Turnstile: register/login verify the token server-side only
+    # when a secret is configured; unset = no verification (dev, tests)
+    turnstile_secret: str | None = None
+    public_summary_ttl_seconds: int = 600  # /v1/public/region/thessaly/summary cache
 
     # ingestion worker (python -m app.ingest)
     ingest_backfill_days: int = 30  # first-run lookback when no watermark exists

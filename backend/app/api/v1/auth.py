@@ -8,7 +8,7 @@ paid either way so timing doesn't leak which emails exist.
 import uuid
 from typing import cast
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from psycopg import errors as pg_errors
 
 from app.api.deps import CurrentUser, DbConn
@@ -17,6 +17,7 @@ from app.api.ratelimit import rate_limit
 from app.api.v1.schemas import LoginIn, RegisterIn, TokenOut, UserOut
 from app.config import get_settings
 from app.security import hash_password, issue_token, verify_password
+from app.turnstile import verify_turnstile
 
 router = APIRouter()
 
@@ -35,6 +36,10 @@ def _dummy_hash() -> str:
     return _dummy
 
 
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
 def _user_out(row: tuple[object, ...]) -> UserOut:
     return UserOut(
         id=cast(uuid.UUID, row[0]),
@@ -44,7 +49,8 @@ def _user_out(row: tuple[object, ...]) -> UserOut:
 
 
 @router.post("/auth/register", status_code=201, dependencies=[AUTH_LIMIT])
-def register(body: RegisterIn, db: DbConn) -> TokenOut:
+def register(body: RegisterIn, db: DbConn, request: Request) -> TokenOut:
+    verify_turnstile(body.turnstile_token, _client_ip(request))
     email = body.email.lower()
     try:
         with db.transaction():
@@ -63,7 +69,8 @@ def register(body: RegisterIn, db: DbConn) -> TokenOut:
 
 
 @router.post("/auth/login", dependencies=[AUTH_LIMIT])
-def login(body: LoginIn, db: DbConn) -> TokenOut:
+def login(body: LoginIn, db: DbConn, request: Request) -> TokenOut:
+    verify_turnstile(body.turnstile_token, _client_ip(request))
     row = db.execute(
         "SELECT id, email, display_name, password_hash FROM users WHERE email = %s",
         (body.email.lower(),),

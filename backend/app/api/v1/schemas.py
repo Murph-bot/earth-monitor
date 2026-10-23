@@ -100,6 +100,15 @@ class SensorStateOut(BaseModel):
 class AoiDetail(AoiOut):
     geom: dict[str, Any]
     sensor_state: list[SensorStateOut]
+    # Sentinel-2 next-pass estimate; see aois.next_pass_estimate for the basis
+    next_pass_estimate: datetime | None
+    next_pass_basis: Literal["last_scene_cadence", "revisit_upper_bound"] | None
+
+
+class BackfillOut(BaseModel):
+    aoi_id: uuid.UUID
+    days: int
+    status: Literal["scheduled"]
 
 
 # --- scenes ----------------------------------------------------------------
@@ -136,11 +145,13 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=200)
     display_name: str | None = Field(default=None, max_length=120)
+    turnstile_token: str | None = Field(default=None, max_length=4096)
 
 
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=200)
+    turnstile_token: str | None = Field(default=None, max_length=4096)
 
 
 class UserOut(BaseModel):
@@ -230,3 +241,36 @@ class MetricSeries(BaseModel):
 class MetricsResponse(BaseModel):
     aoi_id: uuid.UUID
     series: list[MetricSeries]
+
+
+# --- public ----------------------------------------------------------------
+
+
+class GreennessSummary(BaseModel):
+    mean: float | None  # mean ndvi_mean over the last window_days; null = no data
+    previous_mean: float | None  # same, the window before
+    delta: float | None  # mean - previous_mean; null unless both exist
+    areas: int  # monitored areas contributing
+
+
+class RainSummary(BaseModel):
+    # mean over areas of each area's summed daily rain; areas need >= 5 of 7 days
+    mean_mm: float | None
+    areas: int
+
+
+class SceneCountSummary(BaseModel):
+    clear: int  # scenes within clear_max_cloud_pct
+    cloudy: int  # above it, or cloud cover unreported
+    latest_scene_at: datetime | None
+
+
+class ThessalySummary(BaseModel):
+    region: Literal["thessaly"]
+    bounds: list[float]  # minx, miny, maxx, maxy (EPSG:4326)
+    window_days: int
+    clear_max_cloud_pct: float
+    generated_at: datetime
+    greenness: GreennessSummary
+    rain: RainSummary
+    scenes: SceneCountSummary

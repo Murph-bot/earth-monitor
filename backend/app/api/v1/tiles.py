@@ -9,7 +9,7 @@ choice: ?assets=blue,green,red (defaults to the sensor's blue/green/red
 bands for truecolor).
 """
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -22,7 +22,7 @@ from app.api.errors import not_found
 from app.api.ratelimit import rate_limit
 from app.api.v1.scenes import VISIBLE_TO
 from app.config import get_settings
-from app.tiles.render import render_png
+from app.tiles.render import render_ndvi_png, render_png
 
 router = APIRouter()
 
@@ -101,15 +101,25 @@ def tile_png(
     user_id: CurrentUser,
     assets: str | None = Query(None, description="comma-separated band names"),
     stretch: float = Query(0.3, gt=0, le=10, description="reflectance display max"),
+    index: Literal["ndvi"] | None = Query(
+        None, description="render this index in the Thessaly scale instead of RGB bands"
+    ),
 ) -> Response:
     if not (0 <= z <= 24 and 0 <= x < (1 << z) and 0 <= y < (1 << z)):
         raise HTTPException(422, "invalid tile address")
     sensor_id, scene_assets, _col, *_ = _scene_for_tiles(db, scene_id, user_id)
-    hrefs, scale_offsets = _pick_hrefs(db, sensor_id, dict(scene_assets), assets)
+    hrefs, scale_offsets = _pick_hrefs(
+        db, sensor_id, dict(scene_assets), "red,nir" if index == "ndvi" else assets
+    )
     adapter = get_adapter(sensor_id)
     hrefs = tuple(adapter.readable_href(h) for h in hrefs)
     try:
-        png = render_png(hrefs, scale_offsets, stretch, x, y, z)
+        if index == "ndvi":
+            png = render_ndvi_png(
+                (hrefs[0], hrefs[1]), (scale_offsets[0], scale_offsets[1]), x, y, z
+            )
+        else:
+            png = render_png(hrefs, scale_offsets, stretch, x, y, z)
     except TileOutsideBounds:
         raise not_found("tile (outside scene bounds)") from None
     return Response(

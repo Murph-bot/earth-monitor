@@ -246,3 +246,45 @@ def test_pagination(client: TestClient, clean: psycopg.Connection, aoi_id: str) 
     page = client.get(f"/v1/aois/{aoi_id}/scenes?limit=2&offset=1").json()
     assert page["total"] == 3 and len(page["items"]) == 2
     assert client.get(f"/v1/aois/{aoi_id}/scenes?limit=999").status_code == 422
+
+
+def test_create_aoi_schedules_backfill(client: TestClient, backfills: list[Any]) -> None:
+    r = client.post("/v1/aois", json={"name": "fresh", "geojson": AOI})
+    assert r.status_code == 201
+    assert [str(b) for b in backfills] == [r.json()["id"]]
+
+
+def test_backfill_endpoint_is_owner_only(
+    client: TestClient, aoi_id: str, backfills: list[Any]
+) -> None:
+    mine = client.post(f"/v1/aois/{aoi_id}/backfill")
+    assert mine.status_code == 202 and mine.json()["days"] == 90
+    other = client.post(
+        "/v1/auth/register", json={"email": "o@example.com", "password": "long-enough"}
+    )
+    headers = {"Authorization": f"Bearer {other.json()['token']}"}
+    r = client.post(f"/v1/aois/{aoi_id}/backfill", headers=headers)
+    assert r.status_code == 404
+    assert len(backfills) == 2  # one from create (fixture), one from the owner's call
+
+
+def test_aoi_detail_next_pass_estimate(
+    client: TestClient, clean: psycopg.Connection, aoi_id: str
+) -> None:
+    d = client.get(f"/v1/aois/{aoi_id}").json()
+    assert d["next_pass_basis"] == "revisit_upper_bound" and d["next_pass_estimate"]
+    _insert_scene_with_coverage(clean, aoi_id)
+    d = client.get(f"/v1/aois/{aoi_id}").json()
+    assert d["next_pass_basis"] == "last_scene_cadence"
+    assert datetime.fromisoformat(d["next_pass_estimate"]) > datetime.now(UTC)
+
+
+def test_public_summary_sql_runs_without_auth(client: TestClient) -> None:
+    from app.api.v1 import public
+
+    public.clear_cache()
+    r = client.get("/v1/public/region/thessaly/summary")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["scenes"]["clear"] == 0 and body["greenness"]["mean"] is None
+    public.clear_cache()

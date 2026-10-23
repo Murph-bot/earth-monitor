@@ -106,14 +106,15 @@ def _update_watermark(
 
 
 def _aois_with_watermarks(
-    conn: psycopg.Connection, sensor_id: str
+    conn: psycopg.Connection, sensor_id: str, aoi_id: str | None = None
 ) -> list[tuple[str, GeoJSONGeom, datetime | None]]:
     rows = conn.execute(
         """SELECT a.id, ST_AsGeoJSON(a.geom), s.last_checked_at
            FROM aois a
            LEFT JOIN aoi_sensor_state s
-                  ON s.aoi_id = a.id AND s.sensor_id = %s""",
-        (sensor_id,),
+                  ON s.aoi_id = a.id AND s.sensor_id = %s
+           WHERE %s::uuid IS NULL OR a.id = %s::uuid""",
+        (sensor_id, aoi_id, aoi_id),
     ).fetchall()
     return [(str(r[0]), json.loads(r[1]), r[2]) for r in rows]
 
@@ -125,10 +126,14 @@ def ingest_sensor(
     backfill_days: int,
     overlap_hours: int,
     analyze: bool = True,
+    aoi_id: str | None = None,
 ) -> RunStats:
     """Run one catalog sweep for `adapter`'s sensor. Writes an ingestion_runs
     audit row; on adapter/DB failure the row is marked failed and the error
-    re-raised (the scheduler isolates per-sensor failures)."""
+    re-raised (the scheduler isolates per-sensor failures).
+
+    With `aoi_id`, only that AOI is searched and its watermark is ignored: the
+    window is always the last `backfill_days` (a user-requested backfill)."""
     sensor_id = adapter.sensor_id
     overlap_hours = max(overlap_hours, adapter.publish_lag_hours)
     with conn.transaction():
@@ -142,10 +147,10 @@ def ingest_sensor(
     scene_ids: list[int] = []
     try:
         now = datetime.now(UTC)
-        for aoi_id, geom, last_checked in _aois_with_watermarks(conn, sensor_id):
+        for row_aoi_id, geom, last_checked in _aois_with_watermarks(conn, sensor_id, aoi_id):
             start: date = (
                 (last_checked - timedelta(hours=overlap_hours)).date()
-                if last_checked
+                if last_checked and aoi_id is None
                 else (now - timedelta(days=backfill_days)).date()
             )
             metas = adapter.search(geom, start, now.date())
@@ -158,7 +163,7 @@ def ingest_sensor(
                     scene_ids.append(scene_id)
                     _refresh_coverage(conn, scene_id)
                 _update_watermark(
-                    conn, aoi_id, sensor_id, max((m.acquired_at for m in metas), default=None)
+                    conn, row_aoi_id, sensor_id, max((m.acquired_at for m in metas), default=None)
                 )
         if analyze:
             # pixel reads happen here — outside the metadata transactions

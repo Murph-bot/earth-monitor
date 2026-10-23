@@ -11,16 +11,20 @@ prod and every endpoint requires a real token.
 """
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Annotated
 
 import psycopg
+import structlog
 from fastapi import Depends, Request
 from psycopg_pool import ConnectionPool
 
 from app.api.errors import unauthorized
 from app.config import get_settings
+from app.ingest.backfill import backfill_aoi, claim, release
 from app.security import decode_token
+
+log = structlog.get_logger()
 
 
 def _pool(request: Request) -> ConnectionPool:
@@ -73,3 +77,30 @@ def get_current_user(request: Request, db: DbConn) -> uuid.UUID:
 
 
 CurrentUser = Annotated[uuid.UUID, Depends(get_current_user)]
+
+
+BackfillRunner = Callable[[uuid.UUID], None]
+
+
+def get_backfill_runner(request: Request) -> BackfillRunner:
+    """The callable a route schedules as a background task. It opens its own
+    pooled connection — the request's is back in the pool by the time it runs.
+    Tests override this dependency, so no catalog is ever hit from a test."""
+    pool = _pool(request)
+
+    def run(aoi_id: uuid.UUID) -> None:
+        key = str(aoi_id)
+        if not claim(key):
+            return
+        try:
+            with pool.connection() as conn:
+                backfill_aoi(conn, key)
+        except Exception:
+            log.exception("backfill_failed", aoi_id=key)
+        finally:
+            release(key)
+
+    return run
+
+
+Backfill = Annotated[BackfillRunner, Depends(get_backfill_runner)]
