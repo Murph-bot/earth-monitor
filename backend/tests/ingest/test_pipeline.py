@@ -9,7 +9,7 @@ session conn is shared, so `clean` wipes ingest-touched tables per test.
 import json
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import psycopg
@@ -24,9 +24,10 @@ from app.adapters.base import (
     SceneWindow,
     SensorAdapter,
 )
+from app.adapters.sentinel2 import Sentinel2Adapter
 from app.config import get_settings
-from app.ingest.pipeline import ingest_sensor, stale_sensors
-from app.ingest.scheduler import due_sensors, poll_interval_hours
+from app.ingest.pipeline import backfill_aoi, ingest_sensor, missing_scenes, stale_sensors
+from app.ingest.scheduler import due_sensors, poll_interval_hours, run_due
 
 AOI: GeoJSONGeom = {
     "type": "Polygon",
@@ -185,3 +186,81 @@ def test_stale_sensors_flags_old_or_missing(db: psycopg.Connection, aoi_id: str)
     assert stale_sensors(db, [adapter], now=datetime(2026, 9, 30, tzinfo=UTC)) == []
     assert stale_sensors(db, [adapter], now=datetime(2026, 10, 30, tzinfo=UTC)) == ["sentinel-2"]
     assert stale_sensors(db, [FakeAdapter()]) == []  # stale_after_days=0 opts out
+
+
+def test_sentinel2_lookback_covers_late_publication() -> None:
+    # Earth Search publishes hours after acquisition and backfills days later;
+    # a 6-hourly sweep must keep re-searching at least 3 days back.
+    assert Sentinel2Adapter.publish_lag_hours >= 72
+
+
+class LateArrivalAdapter(FakeAdapter):
+    """Catalog whose item only appears after the first sweep has run."""
+
+    publish_lag_hours = 72
+
+
+def test_late_published_scene_is_caught_by_next_sweep(db: psycopg.Connection, aoi_id: str) -> None:
+    adapter = LateArrivalAdapter()
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    # simulate the watermark having been set 2.5 days after acquisition
+    db.execute(
+        "UPDATE aoi_sensor_state SET last_checked_at = now() - interval '6 hours' "
+        "WHERE aoi_id = %s",
+        (aoi_id,),
+    )
+    late = _meta("LATE", COVERING)
+    adapter._metas = [late]
+    stats = ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    start, end = adapter.searched_windows[-1]
+    assert (end - start).days >= 3  # type: ignore[operator]
+    assert stats.scenes_inserted == 1
+
+
+def test_missing_scenes_flags_catalog_items_not_stored(db: psycopg.Connection, aoi_id: str) -> None:
+    adapter = FakeAdapter([_meta("S2_OCT19", COVERING), _meta("S2_OCT21", COVERING)])
+    assert missing_scenes(db, adapter) == {aoi_id: ["S2_OCT19", "S2_OCT21"]}
+
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    assert missing_scenes(db, adapter) == {}
+    assert missing_scenes(db, FakeAdapter()) == {}  # empty catalog is not a gap
+
+
+def test_backfill_aoi_ingests_window_without_moving_watermark(
+    db: psycopg.Connection, aoi_id: str
+) -> None:
+    adapter = FakeAdapter([_meta("MISSED", COVERING)])
+    stats = backfill_aoi(db, adapter, aoi_id, date(2026, 10, 15), date(2026, 10, 23), analyze=False)
+
+    assert stats.scenes_found == 1 and stats.scenes_inserted == 1
+    assert adapter.searched_windows == [(date(2026, 10, 15), date(2026, 10, 23))]
+    state = db.execute(
+        "SELECT count(*) FROM aoi_sensor_state WHERE aoi_id = %s", (aoi_id,)
+    ).fetchone()
+    assert state is not None and state[0] == 0
+    assert missing_scenes(db, adapter) == {}
+    # idempotent
+    again = backfill_aoi(db, adapter, aoi_id, date(2026, 10, 15), date(2026, 10, 23), analyze=False)
+    assert again.scenes_inserted == 0
+
+
+def test_backfill_unknown_aoi_raises(clean: psycopg.Connection) -> None:
+    with pytest.raises(KeyError):
+        backfill_aoi(
+            clean,
+            FakeAdapter(),
+            "00000000-0000-0000-0000-000000000000",
+            date(2026, 10, 15),
+            date(2026, 10, 23),
+        )
+
+
+def test_run_due_reports_failed_sensors(
+    db: psycopg.Connection, aoi_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.ingest.scheduler as sched
+
+    monkeypatch.setattr(sched, "all_adapters", lambda: {"sentinel-2": FakeAdapter(boom=True)})
+    monkeypatch.setattr(sched, "get_adapter", lambda _sid: FakeAdapter(boom=True))
+    monkeypatch.setattr(sched, "_is_enabled", lambda _c, sid: sid == "sentinel-2")
+    assert run_due(db, get_settings(), force=True) == ["sentinel-2"]
