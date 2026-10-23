@@ -97,10 +97,12 @@
 .maplibregl-ctrl-attrib {
   font-size: 11px;
 }
-/* phone: attribution moves top-right so the sheet never covers it (QA #2) */
-@media (max-width: 899px) {
-  .maplibregl-ctrl-bottom-right,
-  .maplibregl-ctrl-bottom-left {
-    display: none;
-  }
+/* attribution lives top-right (map.ts) so the bottom sheet never covers it */
+.maplibregl-ctrl-top-right .maplibregl-ctrl-attrib {
+  margin: 8px;
+}
+
+/* the ochre -> teal gradient: wordmark underline, legend bar, chips */
+.scale-bar {
+  background: var(--scale);
 }
