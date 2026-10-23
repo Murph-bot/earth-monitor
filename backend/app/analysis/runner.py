@@ -105,6 +105,15 @@ def _inside_aoi(
 def _record_gaps(
     conn: psycopg.Connection, pair: PendingPair, metric_names: list[str], reason: str
 ) -> None:
+    log.info(
+        "metric_gap",
+        scene_id=pair.scene_id,
+        scene_key=pair.meta.scene_id,
+        aoi_id=pair.aoi_id,
+        metrics=metric_names,
+        reason=reason,
+        cloud_cover=pair.meta.cloud_cover,
+    )
     for name in metric_names:
         conn.execute(
             """INSERT INTO metric_gaps (aoi_id, scene_id, metric_name, reason)
@@ -189,6 +198,15 @@ def _analyze_pair(
     return written
 
 
+def _gap_count(conn: psycopg.Connection, sensor_id: str) -> int:
+    row = conn.execute(
+        """SELECT count(*) FROM metric_gaps g JOIN scenes s ON s.id = g.scene_id
+           WHERE s.sensor_id = %s""",
+        (sensor_id,),
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
 def analyze_pending(conn: psycopg.Connection, adapter: SensorAdapter) -> int:
     """Write metrics for every (scene, aoi) pair missing them. Returns the
     number of metric rows written."""
@@ -197,14 +215,26 @@ def analyze_pending(conn: psycopg.Connection, adapter: SensorAdapter) -> int:
         return 0
 
     by_name = {m.metric_name: m for m in modules}
-    written = 0
-    for pair in _pending_pairs(conn, adapter.sensor_id, list(by_name)):
+    written = failed = 0
+    pairs = _pending_pairs(conn, adapter.sensor_id, list(by_name))
+    gaps_before = _gap_count(conn, adapter.sensor_id)
+    for pair in pairs:
         missing = [by_name[name] for name in pair.missing]
         try:
             written += _analyze_pair(conn, adapter, pair, missing)
         except AdapterError as exc:
             # one unreadable scene doesn't kill the sweep — it stays pending
             # and the next run retries it
+            failed += 1
             log.warning("analyze_pair_failed", scene_id=pair.scene_id, error=str(exc))
-    log.info("analyze_done", sensor_id=adapter.sensor_id, metrics_written=written)
+    # metrics_written alone can't tell "nothing pending" from "every pending
+    # pair was clouded/out of footprint" from "every read failed" — log all.
+    log.info(
+        "analyze_done",
+        sensor_id=adapter.sensor_id,
+        pairs_pending=len(pairs),
+        metrics_written=written,
+        gaps_recorded=_gap_count(conn, adapter.sensor_id) - gaps_before,
+        pairs_failed=failed,
+    )
     return written
