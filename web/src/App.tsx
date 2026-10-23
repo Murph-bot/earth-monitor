@@ -28,6 +28,8 @@ import { navigate, useRoute } from "./router"
 import { AlertsPage } from "./components/AlertsPage"
 import { AreasPanel, type SceneLayer } from "./components/AreasPanel"
 import type { SummaryState } from "./components/ChangeStrip"
+import { RegionSummaryPanel } from "./components/RegionSummaryPanel"
+import { showRegionPanel } from "./regionPanel"
 import type { BackfillState } from "./components/EmptyAreaState"
 import { ExplorePanel, SaveAreaButton, drawnTitle } from "./components/ExplorePanel"
 import { LandingPanel } from "./components/LandingPanel"
@@ -615,7 +617,20 @@ export const App = () => {
   const overlay =
     route.name === "signin" || route.name === "signup" || route.name === "alerts" || route.name === "notfound"
 
+  const regionName =
+    regions.find((r) => r.slug === region)?.name ??
+    (summary.status === "ready" ? summary.data.name : "Region")
   const sheet = (() => {
+    if (showRegionPanel(route.name, regionZoomed, drawMode || !!pendingGeom))
+      return (
+        <Sheet key={`region-${region}`} title={`${regionName} this week`}>
+          {waking ? (
+            <WakingServer attempt={attempt} />
+          ) : (
+            <RegionSummaryPanel state={summary} onClose={allGreece} />
+          )}
+        </Sheet>
+      )
     switch (route.name) {
       case "landing":
         return (
