@@ -28,6 +28,7 @@ from app.config import get_settings
 from app.ingest.pipeline import backfill_aoi, missing_scenes, stale_sensors
 from app.ingest.scheduler import _is_enabled, run_due, serve
 from app.logging import configure_logging
+from app.regions import ensure_region_aois
 
 log = structlog.get_logger()
 
@@ -36,6 +37,7 @@ AUDIT_LOOKBACK_DAYS = 7
 
 def _once(conn: psycopg.Connection) -> int:
     settings = get_settings()
+    ensure_region_aois(conn)  # public regions' sample fields (idempotent)
     failed = run_due(conn, settings, force=True)
     enabled = [a for sid, a in all_adapters().items() if _is_enabled(conn, sid)]
     stale = stale_sensors(conn, enabled)
@@ -96,6 +98,7 @@ def main() -> None:
         elif args.once:
             sys.exit(_once(conn))
         else:
+            ensure_region_aois(conn)
             serve(conn, settings)
 
 

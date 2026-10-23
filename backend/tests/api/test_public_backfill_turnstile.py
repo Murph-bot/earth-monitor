@@ -17,6 +17,7 @@ from app.api.v1.aois import next_pass_estimate
 from app.config import get_settings
 from app.ingest import backfill as backfill_mod
 from app.main import create_app
+from app.regions import REGIONS
 
 USER = uuid.uuid4()
 AOI_ID = uuid.uuid4()
@@ -84,7 +85,7 @@ def test_summary_real_rows_and_delta() -> None:
     assert body["greenness"]["delta"] == pytest.approx(-0.03)
     assert body["rain"] == {"mean_mm": 12.0, "areas": 5}
     assert body["scenes"]["clear"] == 3 and body["scenes"]["cloudy"] == 2
-    assert body["bounds"] == list(public.THESSALY_BBOX)
+    assert body["bounds"] == list(REGIONS["thessaly"].bbox)
 
 
 def test_summary_no_data_is_null_not_zero() -> None:

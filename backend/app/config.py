@@ -38,7 +38,6 @@ class Settings(BaseSettings):
     # Cloudflare Turnstile: register/login verify the token server-side only
     # when a secret is configured; unset = no verification (dev, tests)
     turnstile_secret: str | None = None
-    public_summary_ttl_seconds: int = 600  # /v1/public/region/thessaly/summary cache
 
     # ingestion worker (python -m app.ingest)
     ingest_backfill_days: int = 30  # first-run lookback when no watermark exists
@@ -46,6 +45,7 @@ class Settings(BaseSettings):
     ingest_min_interval_hours: float = 6.0  # floor on per-sensor poll cadence
     ingest_interval_hours: float | None = None  # set to override all sensor cadences
     ingest_tick_seconds: int = 60  # scheduler wake-up granularity
+    public_summary_ttl_seconds: int = 600  # /v1/public/region/{slug}/summary cache
     ingest_analyze: bool = True  # False = catalog-only sweeps (no pixel reads)
 
     @field_validator("cors_origins", mode="before")

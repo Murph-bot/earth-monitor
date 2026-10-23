@@ -265,8 +265,9 @@ class SceneCountSummary(BaseModel):
     latest_scene_at: datetime | None
 
 
-class ThessalySummary(BaseModel):
-    region: Literal["thessaly"]
+class RegionSummary(BaseModel):
+    region: str  # slug from app.regions.REGIONS
+    name: str
     bounds: list[float]  # minx, miny, maxx, maxy (EPSG:4326)
     window_days: int
     clear_max_cloud_pct: float
