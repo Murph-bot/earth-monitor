@@ -230,3 +230,34 @@ class MetricSeries(BaseModel):
 class MetricsResponse(BaseModel):
     aoi_id: uuid.UUID
     series: list[MetricSeries]
+
+
+class GreennessSummary(BaseModel):
+    mean: float | None  # mean ndvi_mean over the last 7 days
+    previous_mean: float | None  # the 7 days before that
+    delta: float | None
+    areas: int
+
+
+class RainSummary(BaseModel):
+    # mean over areas of each area's summed daily rain; areas need >= 5 of 7 days
+    mean_mm: float | None
+    areas: int
+
+
+class SceneCountSummary(BaseModel):
+    clear: int  # scenes within clear_max_cloud_pct
+    cloudy: int  # above it, or cloud cover unreported
+    latest_scene_at: datetime | None
+
+
+class RegionSummary(BaseModel):
+    region: str  # slug from app.regions.REGIONS
+    name: str
+    bounds: list[float]  # minx, miny, maxx, maxy (EPSG:4326)
+    window_days: int
+    clear_max_cloud_pct: float
+    generated_at: datetime
+    greenness: GreennessSummary
+    rain: RainSummary
+    scenes: SceneCountSummary
