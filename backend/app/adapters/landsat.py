@@ -83,6 +83,10 @@ class LandsatAdapter(SensorAdapter):
     catalog = "planetary-computer"
     collections = (COLLECTION,)
     mask_band = "qa_pixel"
+    # Planetary Computer publishes C2 L2 items ~1-2 weeks after acquisition
+    # (e.g. 2026-10-02 acquired, created 2026-10-12).
+    publish_lag_hours = 16 * 24
+    stale_after_days = 40
 
     def readable_href(self, href: str) -> str:
         return with_retry(partial(_sign, href))

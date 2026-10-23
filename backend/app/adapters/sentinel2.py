@@ -59,6 +59,7 @@ class Sentinel2Adapter(SensorAdapter):
     catalog = "earth-search"
     collections = (COLLECTION,)
     mask_band = "scl"
+    stale_after_days = 12
 
     def band_registry(self) -> list[BandSpec]:
         return list(BANDS)

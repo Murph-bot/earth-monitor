@@ -130,6 +130,7 @@ def ingest_sensor(
     audit row; on adapter/DB failure the row is marked failed and the error
     re-raised (the scheduler isolates per-sensor failures)."""
     sensor_id = adapter.sensor_id
+    overlap_hours = max(overlap_hours, adapter.publish_lag_hours)
     with conn.transaction():
         row = conn.execute(
             "INSERT INTO ingestion_runs (sensor_id) VALUES (%s) RETURNING id", (sensor_id,)
@@ -191,3 +192,23 @@ def ingest_sensor(
         metrics=metrics_written,
     )
     return RunStats(sensor_id, aois_checked, found, inserted, metrics_written, scene_ids)
+
+
+def stale_sensors(
+    conn: psycopg.Connection, adapters: list[SensorAdapter], *, now: datetime | None = None
+) -> list[str]:
+    """Sensors whose newest stored scene is older than their stale_after_days
+    (or that have none). A green run that saved nothing for weeks is a stall."""
+    now = now or datetime.now(UTC)
+    stale: list[str] = []
+    for adapter in adapters:
+        if adapter.stale_after_days <= 0:
+            continue
+        row = conn.execute(
+            "SELECT max(acquired_at) FROM scenes WHERE sensor_id = %s", (adapter.sensor_id,)
+        ).fetchone()
+        newest = row[0] if row else None
+        if newest is None or now - newest > timedelta(days=adapter.stale_after_days):
+            log.warning("sensor_stale", sensor_id=adapter.sensor_id, newest_scene=str(newest))
+            stale.append(adapter.sensor_id)
+    return stale

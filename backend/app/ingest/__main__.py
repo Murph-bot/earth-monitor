@@ -6,11 +6,14 @@ are real commits (see ingest.pipeline's transaction model note).
 """
 
 import argparse
+import sys
 
 import psycopg
 
+from app.adapters.registry import all_adapters
 from app.config import get_settings
-from app.ingest.scheduler import run_due, serve
+from app.ingest.pipeline import stale_sensors
+from app.ingest.scheduler import _is_enabled, run_due, serve
 from app.logging import configure_logging
 
 
@@ -24,6 +27,9 @@ def main() -> None:
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
         if args.once:
             run_due(conn, settings, force=True)
+            enabled = [a for sid, a in all_adapters().items() if _is_enabled(conn, sid)]
+            if stale_sensors(conn, enabled):
+                sys.exit(1)  # make a silent stall visible as a red CI run
         else:
             serve(conn, settings)
 

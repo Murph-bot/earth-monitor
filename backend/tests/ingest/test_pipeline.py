@@ -25,7 +25,7 @@ from app.adapters.base import (
     SensorAdapter,
 )
 from app.config import get_settings
-from app.ingest.pipeline import ingest_sensor
+from app.ingest.pipeline import ingest_sensor, stale_sensors
 from app.ingest.scheduler import due_sensors, poll_interval_hours
 
 AOI: GeoJSONGeom = {
@@ -162,3 +162,26 @@ def test_poll_interval_hours() -> None:
     assert poll_interval_hours(0.1, s) == s.ingest_min_interval_hours  # floor
     override = get_settings().model_copy(update={"ingest_interval_hours": 1.0})
     assert poll_interval_hours(5.0, override) == 1.0
+
+
+class LateCatalogAdapter(FakeAdapter):
+    publish_lag_hours = 16 * 24
+    stale_after_days = 12
+
+
+def test_publish_lag_widens_lookback(db: psycopg.Connection, aoi_id: str) -> None:
+    adapter = LateCatalogAdapter()
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    start, end = adapter.searched_windows[-1]
+    # second sweep has a watermark; the late catalog forces >=16 days back, not 2
+    assert (end - start).days >= 16  # type: ignore[operator]
+
+
+def test_stale_sensors_flags_old_or_missing(db: psycopg.Connection, aoi_id: str) -> None:
+    adapter = LateCatalogAdapter([_meta("OLD", COVERING)])
+    assert stale_sensors(db, [adapter]) == ["sentinel-2"]  # nothing stored yet
+    ingest_sensor(db, adapter, backfill_days=30, overlap_hours=48, analyze=False)
+    assert stale_sensors(db, [adapter], now=datetime(2026, 9, 30, tzinfo=UTC)) == []
+    assert stale_sensors(db, [adapter], now=datetime(2026, 10, 30, tzinfo=UTC)) == ["sentinel-2"]
+    assert stale_sensors(db, [FakeAdapter()]) == []  # stale_after_days=0 opts out
