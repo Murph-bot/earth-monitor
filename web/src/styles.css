@@ -127,6 +127,8 @@
   padding-right: 44px;
 }
 .maplibregl-ctrl-attrib-button {
+  background-repeat: no-repeat;
+  background-position: center;
   width: 44px;
   height: 44px;
   min-height: 44px;

@@ -39,9 +39,11 @@ export const initMap = (container: HTMLElement) => {
       if (l.type === "background") map.setPaintProperty(l.id, "background-color", BASEMAP_BG)
   })
   // basemap style references sprite images it doesn't ship (circle-11,
-  // wood-pattern…): register a transparent 1x1 so MapLibre stops warning
-  map.on("styleimagemissing", (e) => {
-    if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) })
+  // wood-pattern…). MapLibre 6 fires `styleimagemissing` only *after* the
+  // lookup failed and warns unconditionally, so a listener can't silence it;
+  // the resolver runs first — register a transparent 1x1 there.
+  map.setMissingStyleImageResolver((id) => {
+    if (!map.hasImage(id)) map.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) })
   })
   // phone: collapsed behind a 44px toggle; desktop: always expanded
   const phone = typeof window !== "undefined" && window.innerWidth <= PHONE_MAX
