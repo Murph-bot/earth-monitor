@@ -284,6 +284,12 @@ export const App = () => {
         paint: { "fill-color": TEAL, "fill-opacity": 0.08 },
       })
       map.addLayer({
+        id: "region-line-casing",
+        type: "line",
+        source: "regions",
+        paint: { "line-color": "#09090b", "line-width": 5 },
+      })
+      map.addLayer({
         id: "region-line",
         type: "line",
         source: "regions",
