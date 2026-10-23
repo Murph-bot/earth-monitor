@@ -6,26 +6,17 @@ import { tileUrl, type OverviewLayer } from "./overview"
 // MapLibre 6 resolves its worker at runtime, which bundlers miss; ship it as an asset.
 maplibregl.setWorkerUrl(workerUrl)
 
-// MapLibre, no token: OSM raster basemap for orientation — scene imagery is
+export const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/dark"
+export const BASEMAP_BG = "#0d1512"
+
+// MapLibre, no token: OpenFreeMap dark basemap for orientation — scene imagery is
 // the product layer rendered by our own /v1/tiles endpoints.
 export const initMap = (container: HTMLElement) => {
   const map = new maplibregl.Map({
     container,
-    style: {
-      version: 8,
-      sources: {
-        osm: {
-          type: "raster",
-          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-          tileSize: 256,
-          attribution: "© OpenStreetMap contributors",
-        },
-      },
-      layers: [
-        { id: "bg", type: "background", paint: { "background-color": "#09090b" } },
-        { id: "osm", type: "raster", source: "osm", paint: { "raster-opacity": 0.55 } },
-      ],
-    },
+    // OpenFreeMap dark vector style (free, no key; tiles/glyphs/sprites all
+    // on tiles.openfreemap.org). Background retinted to the app surface.
+    style: BASEMAP_STYLE,
     bounds: GREECE_BOUNDS,
     fitBoundsOptions: { padding: viewPadding() },
     // attribution sits top-right (added below) so the phone bottom sheet
@@ -43,19 +34,30 @@ export const initMap = (container: HTMLElement) => {
         : { url }
     },
   })
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right")
+  map.once("styledata", () => {
+    for (const l of map.getStyle().layers ?? [])
+      if (l.type === "background") map.setPaintProperty(l.id, "background-color", BASEMAP_BG)
+  })
+  map.addControl(
+    new maplibregl.AttributionControl({
+      compact: false, // always expanded (design review)
+      customAttribution: "Contains modified Copernicus Sentinel data",
+    }),
+    "top-right",
+  )
   return map
 }
 
 // All of Greece incl. Crete and the eastern Aegean (design brief §10)
-export const GREECE_BOUNDS: [number, number, number, number] = [19.3, 34.7, 29.7, 41.8]
+export const GREECE_BOUNDS: [number, number, number, number] = [19, 34, 30, 42]
 export const TEAL = "#14837d" // s5
 
 const PHONE_MAX = 899
+const PANEL_W = 380 // Sheet desk:w-[380px]
 /** Keep fitted views clear of the phone bottom sheet + control block. */
 export const viewPadding = (): maplibregl.PaddingOptions => {
   if (typeof window === "undefined" || window.innerWidth > PHONE_MAX)
-    return { top: 24, right: 24, bottom: 24, left: 420 }
+    return { top: 24, right: 24, bottom: 24, left: PANEL_W + 16 + 24 } // panel (left-4 + 380px) + 24
   return { top: 16, right: 16, left: 16, bottom: Math.round(window.innerHeight * 0.32) + 150 }
 }
 

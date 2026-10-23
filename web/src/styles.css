@@ -135,3 +135,11 @@
     font-size: 13px;
   }
 }
+
+/* expanded attribution: links get a 44px touch target (design review) */
+.maplibregl-ctrl-attrib a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--spacing-tap, 44px);
+  padding: 0 4px;
+}

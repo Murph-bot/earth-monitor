@@ -14,18 +14,16 @@ const btn =
   "flex items-center justify-center rounded-sm border border-border bg-bg/90 px-3 text-sm font-semibold"
 
 // Corner control (desktop) / full-width block above the sheet (phone):
-// overview on/off, Greenness|Rain, legend + data date + NASA GIBS credit.
+// overview on/off, Greenness|Rain, legend + data date (GIBS credit is in the map attribution).
 export const OverviewControl = (p: Props) => (
   <div
     data-testid="map-controls"
     className="absolute inset-x-3 bottom-[calc(32svh+8px)] z-[5] flex flex-col gap-1.5 desk:inset-x-auto desk:right-3 desk:bottom-9 desk:w-[300px] desk:items-stretch"
   >
     <div className="flex flex-wrap items-center justify-end gap-1.5">
-      {p.regionZoomed && (
-        <button type="button" onClick={p.onAllGreece} className={btn}>
-          All Greece
-        </button>
-      )}
+      <button type="button" onClick={p.onAllGreece} className={btn} title="Fit all of Greece">
+        All Greece
+      </button>
       <button
         type="button"
         aria-pressed={p.on}
@@ -57,7 +55,6 @@ export const OverviewControl = (p: Props) => (
           {p.layer ? dataDateLabel(p.layer) : "Loading overview…"}
         </div>
         <div className="text-muted">Detailed figures come from the fields you draw.</div>
-        <div className="text-muted">Imagery: NASA GIBS</div>
       </div>
     )}
   </div>

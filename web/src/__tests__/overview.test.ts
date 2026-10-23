@@ -50,6 +50,6 @@ describe("GIBS overview", () => {
 
   it("labels the data date", () => {
     expect(dataDateLabel({ kind: "greenness", layer: "", matrixSet: "", maxzoom: 8, time: "2026-10-22" })).toBe("Greenness to 22 Oct")
-    expect(dataDateLabel({ kind: "rain", layer: "", matrixSet: "", maxzoom: 6, time: "2026-10-23T05:30:00Z" })).toBe("Rain 23 Oct, 05:30 UTC")
+    expect(dataDateLabel({ kind: "rain", layer: "", matrixSet: "", maxzoom: 6, time: "2026-10-23T05:30:00Z" })).toBe("Rain 23 Oct, 08:30 Athens time")
   })
 })

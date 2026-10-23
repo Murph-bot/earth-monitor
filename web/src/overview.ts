@@ -87,6 +87,7 @@ export const dataDateLabel = (l: OverviewLayer): string => {
   const d = new Date(l.time.length === 10 ? `${l.time}T00:00:00Z` : l.time)
   const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
   if (l.kind === "greenness") return `Greenness to ${day}`
-  const hm = d.toISOString().slice(11, 16)
-  return `Rain ${day}, ${hm} UTC`
+  const hm = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Athens" })
+  const dayAth = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/Athens" })
+  return `Rain ${dayAth}, ${hm} Athens time`
 }
