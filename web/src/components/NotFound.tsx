@@ -1,7 +1,9 @@
+import { TAGLINE } from "../brand"
 import { Link } from "../router"
 
 export const NotFound = () => (
   <main className="mx-auto my-[12vh] max-w-[760px] p-4 text-center">
+    <p lang="el" className="mb-2 text-muted">{TAGLINE}</p>
     <h1 className="mb-2.5 text-[clamp(26px,4vw,40px)] leading-tight font-bold">
       This place isn't on the map.
     </h1>

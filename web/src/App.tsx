@@ -87,7 +87,11 @@ export const App = () => {
   const [mapReady, setMapReady] = useState(false)
   const [overviewOn, setOverviewOn] = useState(true)
   const [overviewKind, setOverviewKind] = useState<OverviewKind>("greenness")
-  const [overviewLayer, setOverviewLayer] = useState<OverviewLayer | null>(null)
+  const [overviewLayers, setOverviewLayers] = useState<Record<OverviewKind, OverviewLayer | null>>({
+    greenness: null,
+    rain: null,
+  })
+  const overviewLayer = overviewLayers[overviewKind]
   const zoomToRegionRef = useRef<(slug: string) => void>(() => {})
 
   const [aois, setAois] = useState<Aoi[]>([])
@@ -222,16 +226,18 @@ export const App = () => {
     return () => markers.forEach((m) => m.remove())
   }, [regions, mapReady])
 
+  // resolve both layers once (two tiny DescribeDomains requests) so the date
+  // line shows greenness and rain together and switching kinds is instant
   useEffect(() => {
     let cancelled = false
-    setOverviewLayer(null)
-    void resolveOverview(overviewKind).then((l) => {
-      if (!cancelled) setOverviewLayer(l)
-    })
+    for (const k of ["greenness", "rain"] as const)
+      void resolveOverview(k).then((l) => {
+        if (!cancelled) setOverviewLayers((prev) => ({ ...prev, [k]: l }))
+      })
     return () => {
       cancelled = true
     }
-  }, [overviewKind])
+  }, [])
 
   useEffect(() => {
     const map = mapRef.current
@@ -687,7 +693,7 @@ export const App = () => {
           <OverviewControl
             on={overviewOn}
             kind={overviewKind}
-            layer={overviewLayer}
+            layers={overviewLayers}
             regionZoomed={regionZoomed}
             onToggle={() => setOverviewOn((v) => !v)}
             onKind={setOverviewKind}

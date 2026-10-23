@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { CANDIDATES, dataDateLabel, describeDomainsUrl, latestTime, resolveOverview, tileUrl } from "../overview"
+import { CANDIDATES, bothDatesLabel, dataDateLabel, describeDomainsUrl, latestTime, resolveOverview, tileUrl } from "../overview"
 
 const domains = (d: string) =>
   `<Domains><DimensionDomain><ows:Identifier>time</ows:Identifier><Domain>${d}</Domain></DimensionDomain></Domains>`
@@ -51,5 +51,13 @@ describe("GIBS overview", () => {
   it("labels the data date", () => {
     expect(dataDateLabel({ kind: "greenness", layer: "", matrixSet: "", maxzoom: 8, time: "2026-10-22" })).toBe("Greenness to 22 Oct")
     expect(dataDateLabel({ kind: "rain", layer: "", matrixSet: "", maxzoom: 6, time: "2026-10-23T05:30:00Z" })).toBe("Rain 23 Oct, 08:30 Athens time")
+  })
+
+  it("shows both layers on one line in Athens time", () => {
+    const g = { kind: "greenness" as const, layer: "", matrixSet: "", maxzoom: 8, time: "2026-10-22" }
+    const r = { kind: "rain" as const, layer: "", matrixSet: "", maxzoom: 6, time: "2026-10-23T05:30:00Z" }
+    expect(bothDatesLabel(g, r)).toBe("Greenness 15 Oct–22 Oct (8-day) · Rain 23 Oct, 08:30 Athens time")
+    expect(bothDatesLabel(null, r)).toBe("Greenness: loading… · Rain 23 Oct, 08:30 Athens time")
+    expect(bothDatesLabel({ ...g, time: "default" }, null)).toBe("Greenness: latest · Rain: loading…")
   })
 })

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { BRAND, BRAND_SUBTITLE, LANDING_TITLE, REGIONS_LABEL, SITE_URL } from "./src/brand";
+import { BRAND, BRAND_SUBTITLE, TAGLINE, LANDING_TITLE, REGIONS_LABEL, SITE_URL } from "./src/brand";
 
 // One brand constant (src/brand.ts) for the static HTML too: %BRAND%-style
 // tokens in index.html (transformIndexHtml) and public/404.html (rewritten in
@@ -11,6 +11,7 @@ import { BRAND, BRAND_SUBTITLE, LANDING_TITLE, REGIONS_LABEL, SITE_URL } from ".
 const tokens: Record<string, string> = {
   "%BRAND%": BRAND,
   "%BRAND_SUBTITLE%": BRAND_SUBTITLE,
+  "%TAGLINE%": TAGLINE,
   "%LANDING_TITLE%": LANDING_TITLE,
   "%REGIONS%": REGIONS_LABEL,
   "%SITE_URL%": SITE_URL,

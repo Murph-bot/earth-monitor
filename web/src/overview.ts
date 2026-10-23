@@ -91,3 +91,22 @@ export const dataDateLabel = (l: OverviewLayer): string => {
   const dayAth = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/Athens" })
   return `Rain ${dayAth}, ${hm} Athens time`
 }
+
+const fmtDay = (d: Date) =>
+  d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/Athens" })
+
+/** Both layers on one line, Athens time:
+ * "Greenness 15–22 Oct (8-day) · Rain 23 Oct, 08:30 Athens time". */
+export const bothDatesLabel = (g: OverviewLayer | null, r: OverviewLayer | null): string => {
+  let green = "Greenness: loading…"
+  if (g) {
+    if (g.time === "default") green = "Greenness: latest"
+    else {
+      const end = new Date(`${g.time.slice(0, 10)}T12:00:00Z`)
+      const start = new Date(end.getTime() - 7 * 86_400_000)
+      green = `Greenness ${fmtDay(start)}–${fmtDay(end)} (8-day)`
+    }
+  }
+  const rain = r ? dataDateLabel(r) : "Rain: loading…"
+  return `${green} · ${rain}`
+}

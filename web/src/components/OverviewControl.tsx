@@ -1,9 +1,9 @@
-import { dataDateLabel, type OverviewKind, type OverviewLayer } from "../overview"
+import { bothDatesLabel, type OverviewKind, type OverviewLayer } from "../overview"
 
 interface Props {
   on: boolean
   kind: OverviewKind
-  layer: OverviewLayer | null
+  layers: Record<OverviewKind, OverviewLayer | null>
   regionZoomed: boolean
   onToggle: () => void
   onKind: (k: OverviewKind) => void
@@ -52,7 +52,7 @@ export const OverviewControl = (p: Props) => (
       <div className="rounded-sm border border-border bg-bg/90 px-3 py-2 text-xs leading-snug">
         <b className="font-semibold">Coarse overview, ~500 m greenness and ~10 km rain</b>
         <div className="text-muted" data-testid="overview-date">
-          {p.layer ? dataDateLabel(p.layer) : "Loading overview…"}
+          {bothDatesLabel(p.layers.greenness, p.layers.rain)}
         </div>
         <div className="text-muted">Detailed figures come from the fields you draw.</div>
       </div>
