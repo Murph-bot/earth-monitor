@@ -7,8 +7,8 @@ maplibregl.setWorkerUrl(workerUrl)
 
 // MapLibre, no token: OSM raster basemap for orientation — scene imagery is
 // the product layer rendered by our own /v1/tiles endpoints.
-export const initMap = (container: HTMLElement) =>
-  new maplibregl.Map({
+export const initMap = (container: HTMLElement) => {
+  const map = new maplibregl.Map({
     container,
     style: {
       version: 8,
@@ -27,7 +27,9 @@ export const initMap = (container: HTMLElement) =>
     },
     center: [22.9, 39.6],
     zoom: 7.5,
-    attributionControl: { compact: true },
+    // attribution sits top-right (added below) so the phone bottom sheet
+    // never covers it
+    attributionControl: false,
     // keeps the WebGL buffer readable — headless screenshots & future
     // "export view as image" both need it; minor perf cost
     canvasContextAttributes: { preserveDrawingBuffer: true },
@@ -40,6 +42,9 @@ export const initMap = (container: HTMLElement) =>
         : { url }
     },
   })
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right")
+  return map
+}
 
 export const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] }
 

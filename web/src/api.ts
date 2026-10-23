@@ -15,6 +15,7 @@ export type AoiDetail = components["schemas"]["AoiDetail"]
 export type SceneSummary = components["schemas"]["SceneSummary"]
 export type MetricsResponse = components["schemas"]["MetricsResponse"]
 export type MetricSeries = components["schemas"]["MetricSeries"]
+export type ThessalySummary = components["schemas"]["ThessalySummary"]
 
 export interface Health {
   status: string

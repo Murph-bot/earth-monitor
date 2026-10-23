@@ -35,34 +35,34 @@ export const NotificationsBell = () => {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        aria-label="notifications"
-        className="relative rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        aria-label="Notifications"
+        className="relative flex items-center justify-center rounded-sm text-muted hover:bg-surface-2 hover:text-text"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 font-mono text-[9px] font-bold text-zinc-950">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[10px] font-bold text-accent-ink">
             {unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 max-h-80 w-80 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
+        <div className="absolute right-0 z-30 mt-1 max-h-80 w-[min(20rem,calc(100vw-1rem))] overflow-y-auto rounded-lg border border-border bg-surface shadow-xl">
           {items.length === 0 && (
-            <p className="p-3 text-xs text-zinc-500">no notifications yet</p>
+            <p className="p-3 text-sm text-muted">No notifications yet.</p>
           )}
           {items.map((n) => (
             <button
               key={n.id}
               onClick={() => handleRead(n)}
-              className={`block w-full border-b border-zinc-800 p-3 text-left last:border-0 hover:bg-zinc-800/60 ${
+              className={`block w-full border-b border-surface-2 p-3 text-left last:border-0 hover:bg-surface-2 ${
                 n.read_at ? "opacity-50" : ""
               }`}
             >
-              <div className="text-xs font-medium text-zinc-200">{n.title}</div>
-              <div className="mt-0.5 font-mono text-[10px] text-zinc-500">{n.body}</div>
+              <div className="text-sm font-medium">{n.title}</div>
+              <div className="mt-0.5 font-mono text-xs text-muted">{n.body}</div>
             </button>
           ))}
         </div>
